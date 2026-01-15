@@ -1,0 +1,528 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>RouteReel – Ausführliche Anleitung</title>
+  <style>
+    :root{
+      --bg:#0b0f14;
+      --panel:#0f1620;
+      --panel2:#0c131c;
+      --text:#e6e6e6;
+      --muted:#a9b2bf;
+      --accent:#2ea8ff;
+      --accent2:#19c37d;
+      --warn:#ffb020;
+      --danger:#ff4d4d;
+      --border:rgba(255,255,255,.10);
+      --shadow:0 12px 40px rgba(0,0,0,.45);
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+      --radius:14px;
+    }
+
+    @media (prefers-color-scheme: light){
+      :root{
+        --bg:#f7f9fc;
+        --panel:#ffffff;
+        --panel2:#f2f5fb;
+        --text:#111827;
+        --muted:#4b5563;
+        --border:rgba(0,0,0,.12);
+        --shadow:0 10px 30px rgba(0,0,0,.12);
+      }
+    }
+
+    html,body{height:100%}
+    body{
+      margin:0;
+      font-family:var(--sans);
+      background:radial-gradient(1200px 700px at 20% -10%, rgba(46,168,255,.18), transparent 55%),
+                 radial-gradient(900px 600px at 100% 0%, rgba(25,195,125,.14), transparent 60%),
+                 var(--bg);
+      color:var(--text);
+      line-height:1.55;
+    }
+
+    a{color:var(--accent); text-decoration:none}
+    a:hover{text-decoration:underline}
+
+    .wrap{
+      max-width:1100px;
+      margin:0 auto;
+      padding:28px 18px 60px;
+      display:grid;
+      grid-template-columns: 320px 1fr;
+      gap:18px;
+    }
+
+    header{
+      grid-column: 1 / -1;
+      background:linear-gradient(180deg, rgba(46,168,255,.18), rgba(0,0,0,0) 55%),
+                 var(--panel);
+      border:1px solid var(--border);
+      border-radius:var(--radius);
+      box-shadow:var(--shadow);
+      padding:22px 22px 18px;
+    }
+    header h1{
+      margin:0 0 6px 0;
+      font-size:1.55rem;
+      letter-spacing:.2px;
+    }
+    header p{margin:0; color:var(--muted)}
+    .badge{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      padding:6px 10px;
+      border-radius:999px;
+      background:rgba(46,168,255,.12);
+      border:1px solid rgba(46,168,255,.25);
+      font-size:.85rem;
+      margin-right:8px;
+      color:var(--text);
+    }
+    .badge .dot{
+      width:8px; height:8px; border-radius:50%;
+      background:var(--accent);
+      box-shadow:0 0 10px rgba(46,168,255,.55);
+    }
+
+    nav{
+      position:sticky;
+      top:16px;
+      align-self:start;
+      background:var(--panel);
+      border:1px solid var(--border);
+      border-radius:var(--radius);
+      box-shadow:var(--shadow);
+      padding:14px 14px;
+      max-height:calc(100vh - 32px);
+      overflow:auto;
+    }
+    nav h2{
+      margin:0 0 10px 0;
+      font-size:.95rem;
+      letter-spacing:.6px;
+      text-transform:uppercase;
+      color:var(--muted);
+    }
+    nav ol{
+      margin:0;
+      padding-left:18px;
+    }
+    nav li{margin:6px 0}
+    nav a{color:var(--text)}
+    nav a:hover{color:var(--accent); text-decoration:none}
+    .hint{
+      margin-top:12px;
+      padding:10px 10px;
+      border-radius:12px;
+      border:1px dashed var(--border);
+      background:var(--panel2);
+      color:var(--muted);
+      font-size:.9rem;
+    }
+
+    main{
+      background:var(--panel);
+      border:1px solid var(--border);
+      border-radius:var(--radius);
+      box-shadow:var(--shadow);
+      padding:18px 22px 26px;
+      min-width:0;
+    }
+
+    section{
+      padding:10px 0 18px;
+      border-bottom:1px solid var(--border);
+    }
+    section:last-child{border-bottom:none}
+    h2{
+      margin:10px 0 10px;
+      font-size:1.25rem;
+      display:flex;
+      align-items:center;
+      gap:10px;
+    }
+    .kicker{
+      font-family:var(--mono);
+      font-size:.85rem;
+      padding:3px 8px;
+      border:1px solid var(--border);
+      border-radius:10px;
+      color:var(--muted);
+      background:var(--panel2);
+    }
+
+    h3{margin:14px 0 8px; font-size:1.05rem}
+    p{margin:8px 0}
+    ul{margin:8px 0 8px 18px}
+    li{margin:6px 0}
+    .callout{
+      margin:10px 0;
+      padding:12px 14px;
+      border-radius:14px;
+      border:1px solid var(--border);
+      background:linear-gradient(180deg, rgba(46,168,255,.10), rgba(0,0,0,0)),
+                 var(--panel2);
+    }
+    .callout strong{color:var(--text)}
+    .grid2{
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:12px;
+    }
+    @media (max-width: 980px){
+      .wrap{grid-template-columns:1fr}
+      nav{position:relative; top:auto; max-height:none}
+      .grid2{grid-template-columns:1fr}
+    }
+
+    code, pre{
+      font-family:var(--mono);
+      font-size:.92em;
+    }
+    pre{
+      margin:10px 0;
+      padding:12px 14px;
+      border-radius:14px;
+      border:1px solid var(--border);
+      background:#0b1119;
+      overflow:auto;
+    }
+    @media (prefers-color-scheme: light){
+      pre{background:#0b1119; color:#eaf0ff}
+    }
+
+    .pillrow{
+      display:flex;
+      flex-wrap:wrap;
+      gap:8px;
+      margin:10px 0 4px;
+    }
+    .pill{
+      padding:6px 10px;
+      border-radius:999px;
+      border:1px solid var(--border);
+      background:var(--panel2);
+      color:var(--muted);
+      font-size:.9rem;
+      white-space:nowrap;
+    }
+    .pill.good{border-color:rgba(25,195,125,.35); background:rgba(25,195,125,.10); color:var(--text)}
+    .pill.warn{border-color:rgba(255,176,32,.35); background:rgba(255,176,32,.10); color:var(--text)}
+
+    .toplink{
+      display:inline-flex;
+      gap:8px;
+      align-items:center;
+      margin-top:10px;
+      color:var(--muted);
+      font-size:.92rem;
+    }
+
+    /* Print */
+    @media print{
+      body{background:#fff; color:#000}
+      header, nav, main{box-shadow:none; border-color:#ddd}
+      a{color:#000; text-decoration:underline}
+      .wrap{max-width:none; grid-template-columns:1fr; padding:0}
+      nav{display:none}
+      header{border-radius:0}
+      main{border-radius:0}
+      pre{background:#f6f7f9; color:#111; border-color:#ddd}
+    }
+  </style>
+</head>
+
+<body>
+  <div class="wrap" id="top">
+    <header>
+      <div class="pillrow">
+        <span class="badge"><span class="dot"></span> RouteReel – Ausführliche Anleitung</span>
+        <span class="pill good">Single-File HTML</span>
+        <span class="pill">Mapbox GL JS</span>
+        <span class="pill">Turf.js</span>
+        <span class="pill warn">Export: WebM (VP9)</span>
+      </div>
+      <h1>RouteReel – Travel Animator</h1>
+      <p>
+        Diese Anleitung erklärt Schritt für Schritt die Bedienung aller Funktionen:
+        Route-Video (2D/3D), Heatmap-Video, Zoom-/Kamerafahrten mit Keyframes sowie Export/Tipps.
+      </p>
+    </header>
+
+    <nav>
+      <h2>Inhalt</h2>
+      <ol>
+        <li><a href="#voraussetzungen">Voraussetzungen</a></li>
+        <li><a href="#start">Start: Token, Karte, Check</a></li>
+        <li><a href="#route">ROUTE: Fahrt als 2D/3D-Video</a></li>
+        <li><a href="#zoom">ZOOM: Kamerafahrt mit Keyframes</a></li>
+        <li><a href="#heat">HEAT: Heatmap-Video</a></li>
+        <li><a href="#marker">Marker mit Text</a></li>
+        <li><a href="#export">Export & Weiterverarbeitung</a></li>
+        <li><a href="#tipps">Tipps für schöne Ergebnisse</a></li>
+      </ol>
+
+      <div class="hint">
+        Tipp: Du kannst diese Seite auch als PDF drucken (Browser → Drucken).
+      </div>
+    </nav>
+
+    <main>
+      <section id="voraussetzungen">
+        <h2><span class="kicker">1</span> Voraussetzungen</h2>
+        <div class="grid2">
+          <div class="callout">
+            <strong>Du brauchst</strong>
+            <ul>
+              <li>einen aktuellen Browser (Chrome/Edge empfohlen)</li>
+              <li>einen <strong>Mapbox Access Token</strong> (beginnt mit <code>pk...</code>)</li>
+              <li>optional: Google Takeout Standortverlauf (JSON) <em>oder</em> geplante Route</li>
+            </ul>
+          </div>
+          <div class="callout">
+            <strong>Wichtige Hinweise</strong>
+            <ul>
+              <li><strong>Export:</strong> WebM (VP9). Für MP4 später z.B. HandBrake nutzen.</li>
+              <li><strong>Performance:</strong> große Strecken + hoher Zoom = mehr Render-Last.</li>
+              <li>Alles läuft lokal im Browser; Kartendaten kommen von Mapbox.</li>
+            </ul>
+          </div>
+        </div>
+
+        <p class="toplink"><a href="#top">↑ nach oben</a></p>
+      </section>
+
+      <section id="start">
+        <h2><span class="kicker">2</span> Start: Token, Karte, Check</h2>
+        <ol>
+          <li><strong>Datei öffnen:</strong> <code>RouteReel.html</code> lokal per Doppelklick im Browser öffnen.</li>
+          <li><strong>Token einfügen:</strong> oben in das Token-Feld deinen Mapbox Token eintragen.</li>
+          <li><strong>CHECK klicken:</strong> die Karte initialisiert sich sofort, wenn alles passt.</li>
+        </ol>
+
+        <div class="callout">
+          <strong>Typische Fehlerquelle:</strong>
+          Wenn die Karte nach CHECK nicht reagiert, ist meist der Token ungültig oder durch Referrer/Domain eingeschränkt.
+        </div>
+
+        <p class="toplink"><a href="#top">↑ nach oben</a></p>
+      </section>
+
+      <section id="route">
+        <h2><span class="kicker">3</span> ROUTE: Fahrt als 2D/3D-Video</h2>
+
+        <h3>A) Datei laden (Google Takeout JSON)</h3>
+        <ol>
+          <li>Tab <strong>ROUTE</strong> → <strong>DATEI LADEN</strong></li>
+          <li>JSON auswählen</li>
+          <li>Zeitraum einstellen:
+            <ul>
+              <li><strong>Startzeit</strong></li>
+              <li><strong>Endzeit</strong></li>
+            </ul>
+          </li>
+        </ol>
+        <p>
+          Danach erscheint die Route als Linie, und die Karte zoomt auf den Bereich.
+        </p>
+
+        <div class="grid2">
+          <div class="callout">
+            <strong>Dauer & Zoom</strong>
+            <ul>
+              <li><strong>Dauer:</strong> 30s / 1 Min / 5 Min / 20 Min / Echtzeit</li>
+              <li><strong>Zoom:</strong> Nah / Mittel / Fern / Weit / Welt</li>
+            </ul>
+          </div>
+          <div class="callout">
+            <strong>2D Stil</strong>
+            <p>Wähle den Stil für die 2D-Aufnahme (z.B. Light, Dark, Straßen, Satellit).</p>
+          </div>
+        </div>
+
+        <h3>B) Route planen (ohne Datei)</h3>
+        <ol>
+          <li>Tab <strong>ROUTE</strong> → <strong>ROUTE PLANEN</strong></li>
+          <li>Auf die Karte klicken: Startpunkt → Zielpunkt (optional Zwischenpunkte)</li>
+          <li><strong>BERECHNEN</strong> (Mapbox Directions API)</li>
+        </ol>
+
+        <h3>C) Info im Film: Uhrzeit / Fahrzeit / km</h3>
+        <p>
+          Unter <strong>INFO IM FILM</strong> kannst du per Häkchen auswählen, was angezeigt wird:
+        </p>
+        <ul>
+          <li><strong>Uhrzeit</strong></li>
+          <li><strong>Fahrzeit</strong> (Tour-Zeit, nicht Videolänge)</li>
+          <li><strong>km seit Start</strong></li>
+        </ul>
+        <p>Die Werte laufen schnell, bleiben aber gut lesbar (typisch ~2 Updates/Sek.).</p>
+
+        <h3>D) Aufnahme starten</h3>
+        <div class="grid2">
+          <div class="callout">
+            <strong>REC 3D</strong>
+            <ul>
+              <li>3D-Look (Pitch/Bearing)</li>
+              <li>Satellit/3D-Ansicht</li>
+              <li>ideal für „cinematische“ Shots</li>
+            </ul>
+          </div>
+          <div class="callout">
+            <strong>REC 2D</strong>
+            <ul>
+              <li>Top-down (Pitch 0°)</li>
+              <li>stabil für Streckenfilme</li>
+              <li>ideal für lange Fahrten</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="callout">
+          <strong>Während der Aufnahme:</strong>
+          UI blendet aus, REC-Punkt erscheint, Info-Box wird <strong>in den Film eingebrannt</strong>.
+          Am Ende startet automatisch ein Download (WebM).
+        </div>
+
+        <p class="toplink"><a href="#top">↑ nach oben</a></p>
+      </section>
+
+      <section id="zoom">
+        <h2><span class="kicker">4</span> ZOOM: Kamerafahrt mit Keyframes</h2>
+        <p>
+          Der Zoom-Modus ist für „Map-Cinematics“: Du definierst Kamerastände (Position, Zoom, Bearing, Pitch),
+          und RouteReel fährt sie als Video ab.
+        </p>
+
+        <h3>Keyframes setzen</h3>
+        <ol>
+          <li>Tab <strong>ZOOM</strong> öffnen</li>
+          <li>Die Karte in die gewünschte Ansicht bringen:
+            <ul>
+              <li>Position (Center)</li>
+              <li>Zoom</li>
+              <li>optional: Bearing (drehen) und Pitch (kippen)</li>
+            </ul>
+          </li>
+          <li>Buttons:
+            <ul>
+              <li><strong>START</strong>: setzt Keyframe 1</li>
+              <li><strong>+ PUNKT</strong>: fügt Zwischen-Keyframe ein (max. 10)</li>
+              <li><strong>ZIEL</strong>: setzt letzten Keyframe</li>
+            </ul>
+          </li>
+        </ol>
+
+        <h3>Keyframe-Liste</h3>
+        <p>In der Liste kannst du:</p>
+        <ul>
+          <li><strong>GO</strong> (zur Ansicht springen)</li>
+          <li>▲ / ▼ (umsortieren)</li>
+          <li>✖ (löschen)</li>
+        </ul>
+
+        <h3>Dauer & Ease</h3>
+        <ul>
+          <li><strong>DAUER (s):</strong> Gesamtlänge der Kamerafahrt</li>
+          <li><strong>EASE:</strong> Smooth oder Linear</li>
+        </ul>
+
+        <div class="callout">
+          <strong>Wichtig:</strong> Für lange Distanzen wirken 4–7 Keyframes oft deutlich besser als nur Start/Ziel,
+          weil Bewegung und Zoom gleichmäßiger verteilt werden können.
+        </div>
+
+        <h3>Vorschau & Aufnahme</h3>
+        <ul>
+          <li><strong>VORSCHAU</strong>: spielt die Kamerafahrt ohne Aufzeichnung</li>
+          <li><strong>REC FILM</strong>: zeichnet die Kamerafahrt als WebM auf</li>
+        </ul>
+
+        <p class="toplink"><a href="#top">↑ nach oben</a></p>
+      </section>
+
+      <section id="heat">
+        <h2><span class="kicker">5</span> HEAT: Heatmap-Video</h2>
+        <ol>
+          <li>Tab <strong>HEAT</strong> öffnen</li>
+          <li><strong>Daten laden</strong> (nutzt die geladenen Punkte aus dem Datei-Modus)</li>
+          <li><strong>Radius</strong> und <strong>Intensität</strong> einstellen</li>
+          <li>Modus wählen:
+            <ul>
+              <li><strong>Orbit</strong> (Kamera dreht)</li>
+              <li><strong>Statisch</strong></li>
+            </ul>
+          </li>
+          <li><strong>REC Heatmap</strong> starten</li>
+        </ol>
+
+        <p class="toplink"><a href="#top">↑ nach oben</a></p>
+      </section>
+
+      <section id="marker">
+        <h2><span class="kicker">6</span> Marker mit Text</h2>
+        <p>
+          Im <strong>ZOOM</strong>-Tab kannst du Marker setzen, die beim Zoomen sinnvoll mitskalieren.
+        </p>
+        <ol>
+          <li><strong>MARKER SETZEN</strong> aktivieren</li>
+          <li>in die Karte klicken</li>
+          <li>Text eingeben</li>
+        </ol>
+        <p>Mit <strong>MARKER LÖSCHEN</strong> entfernst du die Marker wieder.</p>
+
+        <p class="toplink"><a href="#top">↑ nach oben</a></p>
+      </section>
+
+      <section id="export">
+        <h2><span class="kicker">7</span> Export & Weiterverarbeitung</h2>
+
+        <div class="callout">
+          <strong>Format:</strong> WebM (VP9). Sehr gute Qualität, aber manchmal nicht „out of the box“ in allen Programmen.
+        </div>
+
+        <h3>WebM → MP4 (empfohlen)</h3>
+        <ol>
+          <li>HandBrake öffnen</li>
+          <li>WebM reinziehen</li>
+          <li>Preset z.B. „Fast 1080p30“ wählen</li>
+          <li>als MP4 exportieren</li>
+        </ol>
+
+        <p class="toplink"><a href="#top">↑ nach oben</a></p>
+      </section>
+
+      <section id="tipps">
+        <h2><span class="kicker">8</span> Tipps für schöne Ergebnisse</h2>
+
+        <ul>
+          <li><strong>Weit/Welt:</strong> lieber längere Dauer → ruhigeres Bild.</li>
+          <li><strong>2D</strong> für Streckenfilme, <strong>3D</strong> für Show-Shots.</li>
+          <li><strong>Keyframes:</strong> bei großen Distanzen 4–7 Punkte statt nur 2.</li>
+          <li>Bei langen Zooms wirkt es natürlich, wenn am Anfang die Kamera „weiter“ ist und am Ende „näher“.</li>
+        </ul>
+
+        <div class="callout">
+          <strong>Mini-Checkliste vor REC:</strong>
+          <div class="pillrow">
+            <span class="pill">Token OK</span>
+            <span class="pill">Route sichtbar</span>
+            <span class="pill">Dauer gesetzt</span>
+            <span class="pill">Zoom gewählt</span>
+            <span class="pill">Info-Häkchen gesetzt</span>
+          </div>
+        </div>
+
+        <p class="toplink"><a href="#top">↑ nach oben</a></p>
+      </section>
+
+    </main>
+  </div>
+</body>
+</html>

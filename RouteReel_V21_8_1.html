@@ -1,0 +1,3797 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mapbox Studio V21.3 (Better Geo + Labels + Warmup)</title>
+    
+    <link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet">
+    
+    <style>
+        /* --- CLEAN DARK UI --- */
+        body { margin: 0; padding: 0; width: 100vw; height: 100vh; overflow: hidden; font-family: 'Segoe UI', sans-serif; background: #000; color: #ccc; }
+        #map { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 0; }
+
+        /* Floating Menu */
+        #controls { 
+            position: absolute; top: 15px; left: 15px; width: 300px;
+            background: rgba(30, 30, 30, 0.95); 
+            border: 1px solid #444; border-radius: 6px;
+            padding: 12px; display: flex; flex-direction: column; gap: 10px;
+            z-index: 10; transition: opacity 0.5s;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.6);
+        }
+        
+        .hidden-ui { opacity: 0; pointer-events: none; }
+        .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+        
+        /* Inputs & Selects */
+        input, select { 
+            background: #222; border: 1px solid #555; color: white; 
+            padding: 5px; border-radius: 3px; width: 100%; box-sizing: border-box; font-size: 0.85em;
+        }
+        input[type="range"] { padding: 0; }
+        label { font-size: 0.7em; color: #888; text-transform: uppercase; font-weight: bold; display:block; margin-bottom: 2px;}
+
+        /* Buttons */
+        button {
+            border: none; padding: 8px 10px; border-radius: 3px; cursor: pointer;
+            font-size: 0.8em; font-weight: bold; color: white; flex-grow: 1;
+            transition: background 0.2s; text-transform: uppercase;
+        }
+        .btn-def { background: #444; } .btn-def:hover { background: #555; }
+        .btn-blue { background: #007acc; } .btn-blue:hover { background: #005a9e; }
+        .btn-red { background: #d32f2f; } .btn-red:hover { background: #b71c1c; }
+        .btn-green { background: #388e3c; } .btn-green:hover { background: #2e7d32; }
+        .btn-org { background: #e65100; } .btn-org:hover { background: #bf360c; }
+        .btn-purp { background: #7b1fa2; } .btn-purp:hover { background: #6a1b9a; }
+
+        /* Tabs */
+        .tabs { display: flex; gap: 2px; background: #222; padding: 2px; border-radius: 4px; }
+        .tab { background: transparent; color: #888; padding: 8px; font-size: 0.85em; border-radius: 3px; flex:1; border:none; cursor:pointer;}
+        .tab:hover { color: #ccc; }
+        .tab.active { background: #007acc; color: white; }
+
+        .sub-tabs { display: flex; gap: 5px; margin-bottom: 5px; border-bottom: 1px solid #444; padding-bottom: 5px;}
+        .sub-tab { background: transparent; border: none; color: #aaa; padding: 4px 8px; font-size: 0.8em; cursor:pointer;}
+        .sub-tab.active { color: white; border-bottom: 2px solid #fff; }
+
+        /* Overlays */
+        .hidden { display: none !important; }
+        .status { font-family: monospace; font-size: 0.75em; color: #aaa; text-align: center; margin-top: 5px; }
+        
+        /* Smart Info Box */
+        #smartInfoBox {
+            position: absolute; bottom: 40px; right: 40px;
+            background: rgba(0, 0, 0, 0.7); color: #fff;
+            padding: 12px 20px; border-radius: 4px; border-left: 4px solid #007acc;
+            font-family: sans-serif; display: none; z-index: 20;
+            min-width: 150px; backdrop-filter: blur(5px);
+        }
+        #locCity { font-size: 1.4em; font-weight: bold; line-height: 1.1; margin-bottom: 2px; }
+        #locRegion { font-size: 0.85em; color: #ccc; text-transform: uppercase; letter-spacing: 1px; }
+
+        
+        #locMeta { 
+            margin-top: 6px; 
+            font-size: 0.85em; 
+            color: #e6e6e6; 
+            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; 
+            white-space: nowrap;
+        }
+/* REC Dot */
+        #recDot {
+            position: absolute; top: 20px; right: 20px;
+            width: 12px; height: 12px; border-radius: 50%;
+            background: #d32f2f; box-shadow: 0 0 10px #d32f2f;
+            display: none; z-index: 30; animation: blink 1s infinite;
+        }
+        @keyframes blink { 50% { opacity: 0; } }
+        
+        .waypoint-marker { background: #007acc; width: 12px; height: 12px; border-radius: 50%; border: 2px solid white; box-shadow: 0 0 5px black; }
+    
+        /* Camera Keyframe List */
+        .cam-kf-list{
+            max-height:140px; overflow:auto;
+            background:#1b1b1b; border:1px solid #333; border-radius:4px;
+            padding:6px; margin-top:6px;
+            font-size:0.75em; line-height:1.3;
+        }
+        .cam-kf-item{ display:flex; gap:6px; align-items:center; margin:4px 0; }
+        .cam-kf-item .cam-kf-meta{ flex:1; color:#bbb; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .cam-kf-item .mini-btn{ flex:0 0 auto; padding:4px 6px; font-size:0.75em; border-radius:3px; }
+
+    
+        /* --- Time Helper Modal (Start/End segment texts) --- */
+        #timeHelperModal{
+            position:absolute; inset:0;
+            background: rgba(0,0,0,0.55);
+            backdrop-filter: blur(3px);
+            z-index: 60;
+        }
+        #timeHelperPanel{
+            position:absolute;
+            left:50%; top:50%;
+            transform: translate(-50%, -50%);
+            width: min(920px, calc(100vw - 40px));
+            max-height: min(80vh, 720px);
+            overflow:auto;
+            background: rgba(20,20,20,0.97);
+            border: 1px solid #444;
+            border-radius: 10px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+            padding: 14px 14px 12px;
+        }
+        .th-head{ display:flex; gap:12px; align-items:flex-start; justify-content:space-between; border-bottom:1px solid #333; padding-bottom:10px; margin-bottom:10px; }
+        .th-title{ font-size: 1.05rem; font-weight: 800; color:#fff; }
+        .th-sub{ font-size:0.85rem; color:#aaa; margin-top:2px; }
+        .th-close{
+            border:none; cursor:pointer;
+            background:#333; color:#fff;
+            border-radius:6px;
+            padding:8px 10px;
+            font-weight:800;
+        }
+        .th-close:hover{ background:#444; }
+        .th-grid{ display:grid; grid-template-columns: 1fr 1fr; gap:12px; }
+        @media (max-width: 720px){ .th-grid{ grid-template-columns: 1fr; } }
+        .th-col{ background:#111; border:1px solid #333; border-radius:8px; padding:10px; }
+        .th-coltitle{ font-size:0.8rem; text-transform:uppercase; letter-spacing:1px; color:#9aa; font-weight:800; margin-bottom:6px; }
+        .th-selected{ color:#fff; font-weight:800; margin-bottom:8px; font-size:0.92rem; }
+        .th-list{ display:flex; flex-direction:column; gap:6px; }
+        .th-item{ border:1px solid #2c2c2c; border-radius:8px; padding:8px 10px; background:#0b0b0b; }
+        .th-item.active{ border-color: rgba(0,122,204,0.7); box-shadow: 0 0 0 1px rgba(0,122,204,0.25) inset; }
+        .th-time{ font-family: monospace; font-size:0.8rem; color:#ddd; }
+        .th-text{ font-size:0.86rem; color:#bbb; margin-top:3px; }
+        .th-foot{ border-top:1px solid #333; padding-top:10px; margin-top:10px; color:#aaa; font-size:0.85rem; }
+
+    
+        /* Recording progress overlay (visible even when UI is hidden) */
+        #progressOverlay{
+            position: fixed;
+            left: 50%;
+            top: 12px;
+            transform: translateX(-50%);
+            width: min(520px, calc(100vw - 24px));
+            z-index: 9999;
+            background: rgba(0,0,0,0.55);
+            border: 1px solid rgba(255,255,255,0.10);
+            border-radius: 12px;
+            padding: 10px 12px;
+            box-shadow: 0 8px 28px rgba(0,0,0,0.45);
+            backdrop-filter: blur(6px);
+            pointer-events: none;
+        }
+        #progressOverlay .rr-progress-bar{
+            width: 100%;
+            height: 6px;
+            background: #333;
+            border-radius: 3px;
+            overflow: hidden;
+        }
+        #progressFill{
+            height: 100%;
+            width: 0%;
+            background: #007acc;
+            transition: width 0.12s linear;
+        }
+        #progressOverlay .rr-progress-meta{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 6px;
+            font-size: 12px;
+            color: #ddd;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        }
+        #progressOverlay .rr-progress-meta span{ opacity: 0.95; }
+
+    </style>
+</head>
+<body>
+
+<div id="recDot"></div>
+
+<div id="smartInfoBox">
+    <div id="locCity">Stadt</div>
+    <div id="locRegion">Land</div>
+    <div id="locMeta"></div>
+</div>
+
+
+<!-- Time helper overlay (Google Timeline segment texts for precise start/end times) -->
+<div id="timeHelperModal" style="display:none;">
+  <div id="timeHelperPanel" role="dialog" aria-modal="true" aria-labelledby="timeHelperTitle">
+    <div class="th-head">
+      <div>
+        <div id="timeHelperTitle" class="th-title">Zeithilfe: Start & Ende</div>
+        <div class="th-sub">Zeigt die Text-/Segmentdaten aus deiner Google-Datei rund um die gewählten Zeiten.</div>
+      </div>
+      <button type="button" class="th-close" onclick="closeTimeHelper()" title="Schließen">✕</button>
+    </div>
+
+    <div class="th-grid">
+      <div class="th-col">
+        <div class="th-coltitle">Start</div>
+        <div id="thStartSelected" class="th-selected">–</div>
+        <div id="thStartList" class="th-list"></div>
+      </div>
+      <div class="th-col">
+        <div class="th-coltitle">Ende</div>
+        <div id="thEndSelected" class="th-selected">–</div>
+        <div id="thEndList" class="th-list"></div>
+      </div>
+    </div>
+
+    <div class="th-foot">
+      Tipp: Richte dich an den Segmentgrenzen (Start/Ende), um eine exakte Abfahrts-/Ankunftszeit zu setzen.
+    </div>
+  </div>
+</div>
+
+<div id="controls">
+    <div class="row">
+        <input type="text" id="mapboxToken" placeholder="Mapbox Token (pk...)" onchange="checkToken()">
+    </div>
+    <div class="row">
+        <select id="mapStyle" onchange="changeGlobalStyle()">
+            <option value="mapbox://styles/mapbox/satellite-streets-v12">Satellit 3D</option>
+            <option value="mapbox://styles/mapbox/light-v11" selected>Light (Relief)</option>
+            <option value="mapbox://styles/mapbox/dark-v11">Dark (Nacht)</option>
+            <option value="mapbox://styles/mapbox/outdoors-v12">Outdoors</option>
+        </select>
+        <button class="btn-def" onclick="checkToken(); triggerDummyDownload()">Check</button>
+    </div>
+
+    <div class="tabs">
+        <button class="tab active" id="tRoute" onclick="setMode('route')">🚗 Route</button>
+        <button class="tab" id="tCam" onclick="setMode('cam')">🎥 Zoom</button>
+        <button class="tab" id="tHeat" onclick="setMode('heat')">🔥 Heat</button>
+    </div>
+
+    <div id="pRoute">
+        <div class="sub-tabs">
+            <button class="sub-tab active" id="subFile" onclick="setSub('file')">Datei laden</button>
+            <button class="sub-tab" id="subPlan" onclick="setSub('plan')">Route planen</button>
+        </div>
+        
+        <div id="subFile">
+            <input type="file" id="fileInput" accept=".json" style="margin-bottom:8px;">
+            <label>Zeitraum:</label>
+            <div class="row">
+                <input type="datetime-local" id="startTime" onchange="updateFilePreview()">
+            </div>
+            <div class="row" style="margin-top:5px;">
+                <input type="datetime-local" id="endTime" onchange="updateFilePreview()">
+            </div>
+        
+            <div class="row" style="margin-top:8px;">
+                <button class="btn-def" id="btnTimeHelper" type="button" onclick="openTimeHelper(false)" title="Zeigt die Google-Texte/Segmente rund um Start & Ende, damit du die Uhrzeiten exakt setzen kannst.">Zeithilfe: Start/Ende</button>
+            </div>
+            <div class="status" style="text-align:left; margin-top:4px; color:#888;">
+                Zeigt die Segment-Texte (z.B. Orte/Aufenthalte/Fahrten) rund um deine gewählten Start-/Endzeiten.
+            </div>
+        </div>
+
+        <div id="subPlan" class="hidden">
+            <div class="row">
+                <button class="btn-red" onclick="clearRoute()">Löschen</button>
+                <button class="btn-green" onclick="calculateRouteFromAPI()">Berechnen</button>
+            </div>
+            <div class="status">Klicke Start -> Ziel auf Karte</div>
+        </div>
+
+        <div style="border-top:1px solid #444; margin: 10px 0;"></div>
+
+        <div class="row">
+            <div style="flex:1">
+                <label>Dauer:</label>
+                <select id="targetDuration">
+                    <option value="30">30 Sek</option>
+                    <option value="60" selected>1 Min</option>
+                    <option value="120">2 Min</option>
+                    <option value="300">5 Min</option>
+                    <option value="600">10 Min</option>
+                    <option value="1200">20 Min</option>
+                    <option value="3600">60 Min</option>
+                    <option value="0">Echtzeit (max. 60 Min)</option>
+                </select>
+            </div>
+            <div style="flex:1">
+                <label>Zoom:</label>
+                <select id="renderZoom">
+                    <option value="15">Nah</option>
+                    <option value="13.5" selected>Mittel</option>
+                    <option value="11">Fern</option>
+                    <option value="9">Weit</option>
+                    <option value="7">Welt</option>
+                </select>
+            </div>
+        </div>
+        
+        <div style="margin-top:8px;">
+            <label>2D Stil:</label>
+            <select id="mapStyle2D">
+                <option value="mapbox://styles/mapbox/light-v11">Light</option>
+                <option value="mapbox://styles/mapbox/dark-v11">Dark</option>
+                <option value="mapbox://styles/mapbox/streets-v12">Straßen</option>
+                <option value="mapbox://styles/mapbox/satellite-streets-v12">Satellit</option>
+            </select>
+        </div>
+
+        <div style="margin-top:8px;">
+            <label>3D Stil:</label>
+            <select id="mapStyle3D">
+                <option value="mapbox://styles/mapbox/satellite-streets-v12" selected>Satellit (3D)</option>
+                <option value="mapbox://styles/mapbox/light-v11">Light (Relief)</option>
+                <option value="mapbox://styles/mapbox/outdoors-v12">Outdoors</option>
+                <option value="mapbox://styles/mapbox/dark-v11">Dark</option>
+            </select>
+        </div>
+
+        
+        <div style="margin-top:10px;">
+            <label>Info im Film:</label>
+            <div class="row" style="gap:10px;">
+                <label style="display:flex; align-items:center; gap:6px; font-size:0.75em; color:#bbb; text-transform:none; font-weight:600; margin:0;">
+                    <input type="checkbox" id="showClock" checked style="width:auto;"> Uhrzeit
+                </label>
+                <label style="display:flex; align-items:center; gap:6px; font-size:0.75em; color:#bbb; text-transform:none; font-weight:600; margin:0;">
+                    <input type="checkbox" id="showDriveTime" checked style="width:auto;"> Fahrzeit
+                </label>
+                <label style="display:flex; align-items:center; gap:6px; font-size:0.75em; color:#bbb; text-transform:none; font-weight:600; margin:0;">
+                    <input type="checkbox" id="showDistance" checked style="width:auto;"> km
+                </label>
+            </div>
+        
+        <div style="margin-top:10px;">
+            <label>Split (lange Videos):</label>
+            <div class="row" style="gap:10px; align-items:center;">
+                <label style="display:flex; align-items:center; gap:6px; font-size:0.75em; color:#bbb; text-transform:none; font-weight:600; margin:0; flex:1;">
+                    <input type="checkbox" id="routeSplitEnabled" style="width:auto;"> aktiv
+                </label>
+                <div style="flex:1">
+                    <select id="routeSplitSeconds" title="Segment-Länge">
+                        <option value="30">30 s</option>
+                        <option value="60">60 s</option>
+                        <option value="90">90 s</option>
+                        <option value="120" selected>120 s</option>
+                        <option value="180">180 s</option>
+                        <option value="300">300 s</option>
+                    </select>
+                </div>
+            </div>
+                        <div class="row" style="gap:10px; align-items:center; margin-top:6px;">
+                <label style="display:flex; align-items:center; gap:8px; font-size:0.85em; color:#bbb; text-transform:none; font-weight:600; margin:0;">
+                    <input type="checkbox" id="routeSplitToFolder" style="width:auto;"> In Ordner speichern (Chrome/Edge, keine Download-Popups)
+                </label>
+            </div>
+<div class="status" style="text-align:left; margin-top:4px; color:#888;">
+                Bei aktivem Split werden mehrere WebM-Teile heruntergeladen (weniger RAM, stabiler bei langen Aufnahmen).
+            </div>
+        </div>
+            <div id=\"splitStatus\" class=\"status\" style=\"text-align:left; margin-top:6px; color:#a9c7d8; display:none;\"></div>
+</div>
+
+
+        <div id="timeEstimate" class="status">--:--</div>
+
+        <div class="row" style="margin-top:12px;">
+            <button class="btn-org" id="btn3D" onclick="preRender('3d')">REC 3D</button>
+            <button class="btn-blue" id="btn2D" onclick="preRender('2d')">REC 2D</button>
+        </div>
+    </div>
+
+    <div id="pCam" class="hidden">
+        <div class="row" style="margin-top:10px;">
+            <button class="btn-def" onclick="setKeyframe('A')">Start</button>
+            <button class="btn-def" onclick="addMidKeyframe()">+ Punkt</button>
+            <button class="btn-def" onclick="setKeyframe('B')">Ziel</button>
+        </div>
+        <div class="row" style="margin-top:6px;">
+            <button class="btn-red" onclick="clearCamKeyframes()">Reset Keyframes</button>
+        </div>
+        <div class="status" id="camKfStatus">Keyframes: 0</div>
+        <div id="camKfList" class="cam-kf-list"></div>
+        <div class="row" style="margin-top:10px;">
+            <div style="flex:1">
+                <label>Dauer (s):</label>
+                <input type="number" id="camDuration" value="10">
+            </div>
+            <div style="flex:1">
+                <label>Ease:</label>
+                <select id="camEase"><option value="easeInOutCubic">Smooth</option><option value="linear">Linear</option></select>
+            </div>
+        </div>
+
+        <div style="border-top:1px solid #444; margin: 10px 0;"></div>
+
+        <div class="row" style="margin-top:6px;">
+            <button class="btn-def" id="btnNoteMode" onclick="toggleNoteAddMode()">Marker setzen</button>
+            <button class="btn-red" onclick="clearNotes()">Marker löschen</button>
+        </div>
+        <div class="status" id="noteStatus">Marker: aus</div>
+
+        <div class="row" style="margin-top:15px;">
+            <button class="btn-blue" onclick="previewCameraMove()">Vorschau</button>
+            <button class="btn-red" onclick="renderCameraMove()">REC Film</button>
+        </div>
+    </div>
+
+    <div id="pHeat" class="hidden">
+        <div class="row" style="margin-top:10px;">
+            <button class="btn-def" onclick="updateHeatmapData()">Daten laden (Tab 1)</button>
+        </div>
+        <div style="margin-top:10px;">
+            <label>Radius:</label>
+            <input type="range" id="heatRadius" min="5" max="50" value="30" oninput="updateHeatmapStyle()">
+            <label>Intensität:</label>
+            <input type="range" id="heatIntensity" min="0.1" max="3" step="0.1" value="1" oninput="updateHeatmapStyle()">
+        </div>
+        <div style="margin-top:10px;">
+            <label>Modus:</label>
+            <select id="heatAnimType"><option value="orbit">Orbit</option><option value="static">Statisch</option></select>
+        </div>
+        <button class="btn-purp" onclick="renderHeatmapVideo()" style="margin-top:15px; width:100%;">REC Heatmap</button>
+    </div>
+
+    <div class="status" id="status">Warte...</div>
+
+</div>
+
+<div id="progressOverlay" class="hidden">
+    <div class="rr-progress-bar"><div id="progressFill"></div></div>
+    <div class="rr-progress-meta">
+        <span id="progressText">0%</span>
+        <span id="progressTime">0:00 / 0:00</span>
+    </div>
+</div>
+
+<div id="map"></div>
+
+
+<script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js">
+    // --- Override preview to use the exact same deterministic renderer (prevents "jump-to-start only" cases) ---
+    function previewCameraMove() {
+        renderCameraMove(true);
+    }
+
+</script>
+<script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
+
+<script>
+
+    // --- Car icon (Option A: lightweight symbol) ---
+    // We embed the SVG as a data-URI so it works reliably even when opened via file:// in Chrome.
+    // If your SVG points sideways, adjust the offset (degrees).
+    const CAR_ICON_ROTATE_OFFSET = 0;
+    // Visibility scale factor for the car icon (1.0 = original). Sven wanted ~4–5x bigger.
+    const CAR_ICON_SCALE = 4.5;
+    const CAR_SVG_EMBED = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 180" width="200" height="360" role="img" aria-label="Symbol eines silbernen DeLorean Autos von oben"><defs><linearGradient id="silverMetallic" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" style="stop-color:#A8A8A8;stop-opacity:1" /><stop offset="35%" style="stop-color:#E0E0E0;stop-opacity:1" /><stop offset="65%" style="stop-color:#E0E0E0;stop-opacity:1" /><stop offset="100%" style="stop-color:#A8A8A8;stop-opacity:1" /></linearGradient><style>
+      .car-body { fill: url(#silverMetallic); stroke: #555555; stroke-width: 1; }
+      .windshield { fill: #AEC6CF; opacity: 0.7; stroke: #555555; stroke-width: 0.5; }
+      .roof-lines { fill: none; stroke: #333333; stroke-width: 1.5; stroke-linecap: round; }
+      .rear-louvers { fill: none; stroke: #111111; stroke-width: 2.5; stroke-linecap: butt; }
+      .bumper { fill: #222222; }
+    </style></defs><path class="car-body" d="M 22,10 Q 50,4 78,10 L 82,35 Q 88,60 88,110 Q 88,150 84,165 L 80,175 Q 50,180 20,175 L 16,165 Q 12,150 12,110 Q 12,60 18,35 Z" /><path class="windshield" d="M 25,42 L 75,42 L 80,75 L 20,75 Z" /><line x1="50" y1="42" x2="50" y2="105" class="roof-lines" stroke-width="3"/><line x1="20" y1="105" x2="80" y2="105" class="roof-lines" /><line x1="20" y1="75" x2="25" y2="105" class="roof-lines" stroke-width="0.8"/><line x1="80" y1="75" x2="75" y2="105" class="roof-lines" stroke-width="0.8"/><g class="rear-louvers"><line x1="22" y1="114" x2="78" y2="114" /><line x1="22" y1="122" x2="78" y2="122" /><line x1="22" y1="130" x2="78" y2="130" /><line x1="22" y1="138" x2="78" y2="138" /><line x1="22" y1="146" x2="78" y2="146" /><line x1="23" y1="154" x2="77" y2="154" /></g><rect x="25" y="8" width="50" height="3" rx="1" class="bumper" opacity="0.6" /><rect x="18" y="170" width="64" height="5" rx="2" class="bumper"/></svg>`;
+    const CAR_SVG_DATA_URI = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(CAR_SVG_EMBED);
+    const CAR_SVG_FILE_FALLBACK = './deloreon.svg';
+
+    let map;
+    let fileData=null, routeGeometry=null;
+    let processedPoints=[], cameraPoints=[];
+    let keyframeA=null, keyframeB=null;
+    let currentStyleURL=''; 
+    let activeMode='file'; 
+    let activeMain='route', activeSub='file';
+    let routeWaypoints=[], routeCoords=[]; 
+    let lastCity="Suche...", lastRegion="";
+    let lastMetaLine="";
+    let routeMeta = { durationSec: null, distanceKm: null };
+    let renderClockStartMs = null;
+    
+    // Time helper (Google semanticSegments texts around chosen start/end)
+    let segmentIndex = []; // [{s,e,text,kind}]
+    let timeHelperAutoTimer = null;
+let metaTimeline = { totalKm: null, driveTotalMs: null, clockStartMs: null };
+
+    const CONFIG = { smoothingWindow: 5, iconRotateOffset: 90, cameraSmoothing: 50, mode3D: { pitch: 60, zoom: 13.5, followBearing: true } };
+
+
+    // Recording state (used to avoid DOM/layout work during capture)
+    const recordingState = { active: false, composite: false };
+
+    // Split output: optional write-to-folder (avoids Chrome multiple-download prompt)
+    let splitFolderHandle = null;
+    let splitWriteQueue = Promise.resolve();
+
+    async function prepareSplitOutput(prefix) {
+        const cfg = getRouteSplitConfig();
+
+        // Reset per run
+        splitFolderHandle = null;
+        splitWriteQueue = Promise.resolve();
+
+        if (!cfg.enabled || !cfg.ms) return { enabled: false, ms: 0, toFolder: false };
+
+        if (!cfg.toFolder) return { enabled: true, ms: cfg.ms, toFolder: false };
+
+        // Folder mode (Chromium): ask user once, then write segments directly to disk (no download prompts)
+        if (typeof window.showDirectoryPicker !== 'function') {
+            alert("Dein Browser unterstützt 'In Ordner speichern' nicht. Bitte Chrome/Edge nutzen oder Ordner-Option ausschalten.");
+            return { enabled: true, ms: cfg.ms, toFolder: false };
+        }
+
+        try {
+            // Must be triggered by a user gesture (REC click) -> ok here.
+            splitFolderHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
+            // Small sanity marker (optional): no file created until first part.
+            return { enabled: true, ms: cfg.ms, toFolder: true };
+        } catch (e) {
+            // User canceled -> fallback to normal downloads
+            splitFolderHandle = null;
+            return { enabled: true, ms: cfg.ms, toFolder: false };
+        }
+    }
+
+
+    function showSplitStatus(msg) {
+        const el = document.getElementById('splitStatus');
+        if (!el) return;
+        el.textContent = msg || '';
+        el.style.display = msg ? 'block' : 'none';
+    }
+    function hideSplitStatus() { showSplitStatus(''); }
+
+
+
+
+    function checkToken() {
+        const t=document.getElementById('mapboxToken').value.trim();
+        if(t.startsWith("pk.")) { document.getElementById('status').innerText="OK"; initMap(t); }
+    }
+
+    function initMap(token) {
+        if (map) return;
+
+        mapboxgl.accessToken = token;
+
+        const initialStyle = document.getElementById('mapStyle').value;
+        currentStyleURL = initialStyle;
+
+        map = new mapboxgl.Map({
+            container: 'map',
+            style: initialStyle,
+            center: [10.45, 51.16],
+            zoom: 4,
+            projection: 'globe',
+            fadeDuration: 0, preserveDrawingBuffer: false
+        });
+
+        
+        // Faster wheel zoom: Mapbox' built-in tuning can be inconsistent across devices/browsers.
+        // We install a small custom wheel handler (keeps everything else unchanged).
+        installFastWheelZoom();
+
+map.addControl(new mapboxgl.NavigationControl(), 'bottom-right');
+
+        map.on('load', async () => {
+            await ensureLayersExist({ restoreData: true });
+            document.getElementById('status').innerText = "Bereit";
+            updateNoteModeUI();
+            document.getElementById('mapboxToken').style.border = "1px solid #00b894";
+        });
+
+        map.on('error', (e) => {
+            // Tile errors happen sometimes – don't kill the app.
+            if (e && e.error) console.warn('Mapbox error:', e.error);
+        });
+
+        map.on('click', (e) => {
+            // Notes (Zoom/Camera mode): click to add labeled markers
+            if (activeMain === 'cam' && noteAddMode) {
+                addNoteAt(e.lngLat);
+                try {
+                    showSplitStatus("Split: fertig.");
+                    setTimeout(() => hideSplitStatus(), 4000);
+                } catch (e) {}
+                return;
+            }
+            // Route planner waypoints
+            if (activeMain === 'route' && activeSub === 'plan') addPt(e.lngLat);
+        });
+    }
+
+    function toggleUI(show) {
+        const ui = document.getElementById('controls');
+        const rec = document.getElementById('recDot');
+        const info = document.getElementById('smartInfoBox');
+
+        if (!show) {
+            ui.classList.add('hidden-ui');
+            rec.style.display = 'block';
+            if (activeMain === 'route') info.style.display = 'block';
+            // Hide time helper when recording starts
+            try { closeTimeHelper(); } catch (e) {}
+        } else {
+            ui.classList.remove('hidden-ui');
+            rec.style.display = 'none';
+            info.style.display = 'none';
+            try { hideSplitStatus(); } catch (e) {}
+        }
+
+        try { if (map) map.resize(); } catch (e) {}
+    }
+
+    async function initLayers() {
+        // Backward-compat wrapper (V12–V19): keeps existing calls intact.
+        await ensureLayersExist({ restoreData: true });
+    }
+
+    
+    // --- Robust layer/style helpers (V20) ---
+    let isRecording = false;
+    let lastMarkerPoint = null;
+    let styleChangeNonce = 0;
+    let routeMarkers = [];
+    let notes = [];
+    let noteAddMode = false;
+    let recordCanvas = null;
+    let recordCtx = null;
+
+    function cleanupRecordCanvas() {
+        try {
+            if (recordCanvas && recordCanvas.parentNode) {
+                recordCanvas.parentNode.removeChild(recordCanvas);
+            }
+        } catch (e) {}
+        recordCanvas = null;
+        recordCtx = null;
+    }
+
+    // -----------------------------
+    // Recording progress UI (Part 4)
+    // -----------------------------
+    const progressUI = {
+        _last: 0,
+        begin(totalFrames, fps) {
+            this.el = document.getElementById('progressOverlay');
+            this.fill = document.getElementById('progressFill');
+            this.txt = document.getElementById('progressText');
+            this.tim = document.getElementById('progressTime');
+            if (!this.el || !this.fill || !this.txt) return;
+            this._last = 0;
+            this.el.classList.remove('hidden');
+            this.fill.style.width = '0%';
+            this.txt.textContent = '0%';
+            const totMs = (totalFrames / Math.max(1, fps)) * 1000;
+            if (this.tim) this.tim.textContent = `0:00 / ${formatDrive(totMs)}`;
+        },
+        update(i, totalFrames, fps) {
+            if (!this.el || !totalFrames || totalFrames <= 0) return;
+            const now = performance.now();
+            if (now - this._last < 120 && i < totalFrames - 1) return;
+            this._last = now;
+
+            const pct = Math.min(100, Math.max(0, ((i + 1) / totalFrames) * 100));
+            this.fill.style.width = pct.toFixed(1) + '%';
+            this.txt.textContent = `${Math.round(pct)}%`;
+
+            if (this.tim) {
+                const elMs = ((i + 1) / Math.max(1, fps)) * 1000;
+                const totMs = (totalFrames / Math.max(1, fps)) * 1000;
+                this.tim.textContent = `${formatDrive(elMs)} / ${formatDrive(totMs)}`;
+            }
+        },
+        message(msg) {
+            try { if (this.tim) this.tim.textContent = msg; } catch (e) {}
+        },
+        end() {
+            try { if (this.el) this.el.classList.add('hidden'); } catch (e) {}
+        }
+    };
+
+    let lastGeoQuery = { t: 0, lng: 0, lat: 0 };
+
+
+    function emptyFC() {
+        return { type: 'FeatureCollection', features: [] };
+    }
+    function emptyLine() {
+        return { type: 'Feature', geometry: { type: 'LineString', coordinates: [] } };
+    }
+    function buildRouteFeature(points) {
+        return { type: 'Feature', geometry: { type: 'LineString', coordinates: points.map(p => [p.lng, p.lat]) } };
+    }
+
+    function waitForMapEvent(eventName, timeoutMs = 8000) {
+        return new Promise(resolve => {
+            if (!map) return resolve(false);
+            let done = false;
+            const t = setTimeout(() => { if (!done) { done = true; resolve(false); } }, timeoutMs);
+            map.once(eventName, () => {
+                if (done) return;
+                done = true;
+                clearTimeout(t);
+                resolve(true);
+            });
+        });
+    }
+
+    async function waitForStyleReady(timeoutMs = 8000) {
+        const t0 = performance.now();
+        while (map && map.isStyleLoaded && !map.isStyleLoaded()) {
+            if (performance.now() - t0 > timeoutMs) return false;
+            await new Promise(r => requestAnimationFrame(r));
+        }
+        return true;
+    }
+
+    async function waitForTiles(timeoutMs = 3000) {
+        const t0 = performance.now();
+        while (map) {
+            const ok = (map.loaded && map.loaded()) && (!map.areTilesLoaded || map.areTilesLoaded());
+            if (ok) return true;
+            if (performance.now() - t0 > timeoutMs) return false;
+            await new Promise(r => requestAnimationFrame(r));
+        }
+        return false;
+    }
+
+function getAntiSwimConfig(zoom, isRecording = false) {
+    // Anti-"Schwimmen" (v.a. bei WEIT/WELT in 2D):
+    // Ziel: Im Preview darf stärker gefiltert werden, während der Aufnahme nur minimal,
+    // damit es stabil bleibt ohne sichtbares "Stop-Go"/Micro-Stuttering.
+    if (isRecording) {
+        // Während der Aufnahme: minimale Filterung
+        if (zoom <= 7.5) return { minPx: 0.5, snap: true, dda: false };   // "Welt"
+        if (zoom <= 9.5) return { minPx: 0.3, snap: true, dda: false };   // "Weit"
+        return { minPx: 0, snap: false, dda: false };
+    }
+
+    // Vorschau: stärkere Filterung
+    if (zoom <= 7.5) return { minPx: 1.5, snap: true, dda: true };       // "Welt"
+    if (zoom <= 9.5) return { minPx: 0.8, snap: true, dda: true };       // "Weit"
+    return { minPx: 0, snap: false, dda: false };
+}
+
+    function getRouteSplitConfig() {
+        const enabledEl = document.getElementById('routeSplitEnabled');
+        const secondsEl = document.getElementById('routeSplitSeconds');
+        const toFolderEl = document.getElementById('routeSplitToFolder');
+
+        const enabled = !!(enabledEl && enabledEl.checked);
+        const sec = parseInt((secondsEl && secondsEl.value) ? secondsEl.value : '0', 10);
+        const ms = (enabled && Number.isFinite(sec) && sec > 0) ? (sec * 1000) : 0;
+
+        const toFolder = !!(toFolderEl && toFolderEl.checked);
+        return { enabled: ms > 0, ms, toFolder };
+    }
+
+
+function mercatorWorldSize(zoom) {
+    // Mapbox GL JS uses a 512px tile-size world at zoom 0.
+    return 512 * Math.pow(2, zoom);
+}
+
+function lngLatToWorldPixel(lng, lat, zoom) {
+    const size = mercatorWorldSize(zoom);
+    const x = (lng + 180) / 360;
+
+    const rad = (lat * Math.PI) / 180;
+    const sin = Math.sin(rad);
+    // clamp to avoid Infinity near poles
+    const y = 0.5 - (Math.log((1 + sin) / (1 - sin)) / (4 * Math.PI));
+
+    return { x: x * size, y: y * size };
+}
+
+function worldPixelToLngLat(x, y, zoom) {
+    const size = mercatorWorldSize(zoom);
+    const nx = x / size;
+    const ny = y / size;
+
+    const lng = nx * 360 - 180;
+
+    const mercY = (0.5 - ny) * 2 * Math.PI;
+    const lat = (Math.atan(Math.sinh(mercY)) * 180) / Math.PI;
+
+    return { lng, lat };
+}
+
+function snapLngLatToWorldPixel(lng, lat, zoom) {
+    const p = lngLatToWorldPixel(lng, lat, zoom);
+    const sx = Math.round(p.x);
+    const sy = Math.round(p.y);
+    return worldPixelToLngLat(sx, sy, zoom);
+}
+
+
+function quantizeLngLatPathToWorldPixelDDA(points, zoom) {
+    // Goal: reduce "pixel wobble" at far zoom by avoiding per-frame round() ping-pong.
+    // We integrate subpixel movement and only step when accumulated delta passes 1px.
+    const n = points ? points.length : 0;
+    if (!n) return points;
+
+    const out = new Array(n);
+
+    const p0 = lngLatToWorldPixel(points[0].lng, points[0].lat, zoom);
+    let lastRawX = p0.x;
+    let lastRawY = p0.y;
+
+    let qx = Math.round(p0.x);
+    let qy = Math.round(p0.y);
+
+    let accX = 0;
+    let accY = 0;
+
+    const ll0 = worldPixelToLngLat(qx, qy, zoom);
+    out[0] = { ...points[0], lng: ll0.lng, lat: ll0.lat };
+
+    for (let i = 1; i < n; i++) {
+        const pr = lngLatToWorldPixel(points[i].lng, points[i].lat, zoom);
+        accX += (pr.x - lastRawX);
+        accY += (pr.y - lastRawY);
+
+        // Step in integer pixels (device pixel space), keep remainder.
+        while (accX >= 1) { qx += 1; accX -= 1; }
+        while (accX <= -1) { qx -= 1; accX += 1; }
+        while (accY >= 1) { qy += 1; accY -= 1; }
+        while (accY <= -1) { qy -= 1; accY += 1; }
+
+        const ll = worldPixelToLngLat(qx, qy, zoom);
+        out[i] = { ...points[i], lng: ll.lng, lat: ll.lat };
+
+        lastRawX = pr.x;
+        lastRawY = pr.y;
+    }
+
+    // Ensure exact end point position (keeps overall drift minimal)
+    const pend = lngLatToWorldPixel(points[n - 1].lng, points[n - 1].lat, zoom);
+    const llEnd = worldPixelToLngLat(Math.round(pend.x), Math.round(pend.y), zoom);
+    out[n - 1] = { ...points[n - 1], lng: llEnd.lng, lat: llEnd.lat };
+
+    return out;
+}
+
+function buildFrameToPointIndex(points, zoom, minPx) {
+    // Returns an array frameIndex -> pointIndex
+    // If per-frame movement is below ~1px, we "hold" the same point for a few frames,
+    // then advance once the accumulated movement exceeds minPx.
+    const n = points ? points.length : 0;
+    const out = new Array(n);
+    if (!n) return out;
+
+    let shown = 0;
+    out[0] = 0;
+
+    let acc = 0;
+    let prev = lngLatToWorldPixel(points[0].lng, points[0].lat, zoom);
+
+    for (let i = 1; i < n; i++) {
+        const cur = lngLatToWorldPixel(points[i].lng, points[i].lat, zoom);
+        const dist = Math.hypot(cur.x - prev.x, cur.y - prev.y);
+        acc += dist;
+
+        if (acc >= minPx) {
+            shown = i;
+            acc -= minPx;
+        }
+
+        out[i] = shown;
+        prev = cur;
+    }
+
+    // Always end on the final point
+    out[n - 1] = n - 1;
+    return out;
+}
+
+
+
+    function waitForRender(timeoutMs = 1000) {
+        return new Promise(resolve => {
+            if (!map) return resolve(false);
+            let done = false;
+            const t = setTimeout(() => { if (!done) { done = true; resolve(false); } }, timeoutMs);
+            map.once('render', () => {
+                if (done) return;
+                done = true;
+                clearTimeout(t);
+                resolve(true);
+            });
+            // Force a repaint even if the map thinks it is idle
+            try { map.triggerRepaint(); } catch (e) {}
+        });
+    }
+
+    async function setMapStyleSafely(styleUrl, { timeoutMs = 12000 } = {}) {
+        if (!map) return false;
+        const want = (styleUrl || '').trim();
+        if (!want) return false;
+
+        // Fast path: same style and already loaded
+        try {
+            if (currentStyleURL === want && map.isStyleLoaded && map.isStyleLoaded()) return true;
+        } catch (e) {}
+
+        styleChangeNonce++;
+        const myNonce = styleChangeNonce;
+
+        currentStyleURL = want;
+        map.setStyle(want);
+
+        // Wait for style.load but don't hang forever
+        await Promise.race([
+            waitForMapEvent('style.load', timeoutMs),
+            new Promise(r => setTimeout(r, timeoutMs))
+        ]);
+
+        // If another style change happened meanwhile, bail out
+        if (myNonce !== styleChangeNonce) return false;
+
+        await waitForStyleReady(timeoutMs);
+        await ensureLayersExist({ restoreData: true });
+
+        // One render pass helps prevent "blank first frame"
+        await waitForRender(1500);
+        return true;
+    }
+
+    async function ensureLayersExist({ restoreData = false } = {}) {
+        if (!map) return;
+
+        // Make sure style is ready enough to accept addSource/addLayer calls
+        await waitForStyleReady(8000);
+
+        // --- Sources ---
+        try {
+            if (!map.getSource('dem')) {
+                map.addSource('dem', {
+                    type: 'raster-dem',
+                    url: 'mapbox://mapbox.mapbox-terrain-dem-v1',
+                    tileSize: 512,
+                    maxzoom: 14
+                });
+            }
+            // Terrain can throw on some styles/projections – that's OK.
+            map.setTerrain({ source: 'dem', exaggeration: 1.5 });
+        
+            try {
+                if (!map.getSource('notes')) {
+                    map.addSource('notes', { type: 'geojson', data: emptyFC() });
+                }
+            } catch (e) {}
+} catch (e) {}
+
+        if (!map.getSource('route')) map.addSource('route', { type: 'geojson', data: emptyLine() });
+        if (!map.getSource('marker')) map.addSource('marker', { type: 'geojson', data: emptyFC() });
+        if (!map.getSource('heat')) map.addSource('heat', { type: 'geojson', data: emptyFC() });
+
+        // --- Image(s) ---
+        if (!map.hasImage('car')) {
+            // Prefer embedded SVG (works even in file://), fallback to ./deloreon.svg next to the HTML.
+            try {
+                const i = await loadImage(CAR_SVG_DATA_URI);
+                map.addImage('car', i, { pixelRatio: 2 });
+            } catch (err1) {
+                try {
+                    const i2 = await loadImage(CAR_SVG_FILE_FALLBACK);
+                    map.addImage('car', i2, { pixelRatio: 2 });
+                } catch (err2) {
+                    // Not fatal; we fall back to circle marker if the icon can't be loaded.
+                    console.warn('Car icon could not be loaded. Using fallback marker.', err2);
+                }
+            }
+        }
+
+// --- Layers ---
+        const before = (() => { try { return findLabelLayer(); } catch (e) { return undefined; } })();
+
+        if (!map.getLayer('hill') && map.getSource('dem')) {
+            try {
+                map.addLayer({
+                    id: 'hill',
+                    source: 'dem',
+                    type: 'hillshade',
+                    paint: {
+                        'hillshade-shadow-color': '#000',
+                        'hillshade-exaggeration': 0.5
+                    }
+                }, before);
+            } catch (e) {}
+        }
+
+        if (!map.getLayer('route-l')) {
+            try {
+                map.addLayer({
+                    id: 'route-l',
+                    type: 'line',
+                    source: 'route',
+                    paint: { 'line-color': '#e17055', 'line-width': 5, 'line-opacity': 0.9 },
+                    layout: { 'line-join': 'round', 'line-cap': 'round' }
+                });
+            } catch (e) {}
+        }
+
+        // Symbol marker (3D) – only add if car icon exists; otherwise it will error.
+        if (!map.getLayer('marker-s') && map.hasImage('car')) {
+            try {
+                map.addLayer({
+                    id: 'marker-s',
+                    type: 'symbol',
+                    source: 'marker',
+                    layout: {
+                        'icon-image': 'car',
+                        'icon-size': ['*', ['interpolate', ['linear'], ['zoom'], 4, 0.18, 8, 0.28, 12, 0.40, 16, 0.55], CAR_ICON_SCALE],
+                        'icon-rotate': ['+', ['get', 'bearing'], CAR_ICON_ROTATE_OFFSET],
+                        'icon-rotation-alignment': 'map',
+                        'icon-allow-overlap': true
+                    }
+                });
+            } catch (e) {}
+        }
+
+        if (!map.getLayer('heat-l')) {
+            try {
+                map.addLayer({
+                    id: 'heat-l',
+                    type: 'heatmap',
+                    source: 'heat',
+                    maxzoom: 15,
+                    paint: {
+                        'heatmap-weight': 1,
+                        'heatmap-intensity': 1,
+                        'heatmap-color': [
+                            'interpolate', ['linear'], ['heatmap-density'],
+                            0, 'rgba(0,0,255,0)',
+                            0.2, 'royalblue',
+                            0.4, 'cyan',
+                            0.6, 'lime',
+                            0.8, 'yellow',
+                            1, 'red'
+                        ],
+                        'heatmap-radius': 30
+                    },
+                    layout: { visibility: 'none' }
+                });
+            } catch (e) {}
+        }
+
+        
+        // Notes (Camera/Zoom markers)
+        if (!map.getLayer('notes-dot')) {
+            try {
+                map.addLayer({
+                    id: 'notes-dot',
+                    type: 'circle',
+                    source: 'notes',
+                    paint: {
+                        'circle-radius': 6,
+                        'circle-color': '#00b894',
+                        'circle-stroke-width': 2,
+                        'circle-stroke-color': '#ffffff',
+                        'circle-opacity': 0.95
+                    },
+                    layout: { visibility: 'none' }
+                });
+            } catch (e) {}
+        }
+        if (!map.getLayer('notes-text')) {
+            try {
+                map.addLayer({
+                    id: 'notes-text',
+                    type: 'symbol',
+                    source: 'notes',
+                    layout: {
+                        'text-field': ['get', 'label'],
+                        'text-font': ['Open Sans Semibold', 'Arial Unicode MS Bold'],
+                        'text-offset': [0, 1.2],
+                        'text-anchor': 'top',
+                        'text-allow-overlap': true,
+                        'text-ignore-placement': true,
+                        'text-rotation-alignment': 'map',
+                        'text-size': [
+                            'interpolate', ['linear'], ['zoom'],
+                            4, 10,
+                            10, 16,
+                            14, 22,
+                            18, 34
+                        ],
+                        visibility: 'none'
+                    },
+                    paint: {
+                        'text-color': '#ffffff',
+                        'text-halo-color': 'rgba(0,0,0,0.8)',
+                        'text-halo-width': 1.25,
+                        'text-halo-blur': 0.6
+                    }
+                });
+            } catch (e) {}
+        }
+
+// --- Restore data / visibility ---
+        // Improve label readability slightly (esp. light styles)
+        try { enhanceLabelReadability(); } catch (e) {}
+
+        if (restoreData) {
+            try {
+                // Restore route preview or current processed route
+                if (processedPoints && processedPoints.length > 1 && map.getSource('route')) {
+                    map.getSource('route').setData(buildRouteFeature(processedPoints));
+                } else if (fileData && activeSub === 'file') {
+                    // keep preview if user loaded a file
+                    updateFilePreview();
+                }
+            } catch (e) {}
+
+            try {
+                if (lastMarkerPoint) updateMarker(lastMarkerPoint);
+            try {
+                if (map.getSource('notes')) map.getSource('notes').setData(buildNotesFC());
+            } catch (e) {}
+
+            } catch (e) {}
+
+            try {
+                if (fileData && activeMain === 'heat') updateHeatmapData();
+            } catch (e) {}
+
+            try {
+                map.setLayoutProperty('heat-l', 'visibility', activeMain === 'heat' ? 'visible' : 'none');
+                map.setLayoutProperty('route-l', 'visibility', activeMain === 'route' ? 'visible' : 'none');
+                if (map.getLayer('marker-s')) map.setLayoutProperty('marker-s', 'visibility', activeMain === 'route' ? 'visible' : 'none');
+
+                if (map.getLayer('notes-dot')) map.setLayoutProperty('notes-dot', 'visibility', activeMain === 'cam' ? 'visible' : 'none');
+                if (map.getLayer('notes-text')) map.setLayoutProperty('notes-text', 'visibility', activeMain === 'cam' ? 'visible' : 'none');
+
+            } catch (e) {}
+        }
+    }
+
+
+    function findLabelLayer() { const l=map.getStyle().layers.find(x=>x.type==='symbol'); return l?l.id:undefined; }
+    function loadImage(u) { return new Promise((r,j)=>{ map.loadImage(u,(e,i)=>{if(e)j(e);else r(i)}) }); }
+
+    function setMode(m) {
+        activeMain = m;
+        ['tRoute','tCam','tHeat'].forEach(x => document.getElementById(x).className = 'tab');
+        document.getElementById(m === 'route' ? 'tRoute' : m === 'cam' ? 'tCam' : 'tHeat').className = 'tab active';
+        ['pRoute','pCam','pHeat'].forEach(x => document.getElementById(x).className = 'hidden');
+        document.getElementById(m === 'route' ? 'pRoute' : m === 'cam' ? 'pCam' : 'pHeat').className = '';
+
+        if (map) {
+            const setVis = (layerId, visible) => {
+                try {
+                    if (map.getLayer(layerId)) map.setLayoutProperty(layerId, 'visibility', visible ? 'visible' : 'none');
+                } catch (e) {}
+            };
+            setVis('heat-l', m === 'heat');
+            setVis('route-l', m === 'route');
+            setVis('marker-s', m === 'route');
+            setVis('marker-c', m === 'route'); // if present (2D)
+            setVis('notes-dot', m === 'cam');
+            setVis('notes-text', m === 'cam');
+        }
+
+        if (m !== 'cam') { noteAddMode = false; updateNoteModeUI(); }
+
+        if (m === 'heat') setTimeout(updateHeatmapData, 100);
+    }
+    function setSub(s) {
+        activeSub=s; activeMode=s;
+        document.getElementById('subFile').style.display=s==='file'?'block':'none';
+        document.getElementById('subPlan').style.display=s==='plan'?'block':'none';
+        if(s==='file') updateFilePreview();
+    }
+
+    function updateGeoInfo() {
+        const center = map.project(map.getCenter());
+        const features = map.queryRenderedFeatures(center); // Query ALL
+        // Filter manually for reliability
+        const city = features.find(f => f.properties && (f.properties.name_de || f.properties.name) && (f.layer.id.includes('settlement') || f.layer.id.includes('place') || f.layer.id.includes('label')));
+        const region = features.find(f => f.properties && (f.properties.name_de || f.properties.name) && (f.layer.id.includes('country') || f.layer.id.includes('admin')));
+        
+        if(city) lastCity = city.properties.name_de || city.properties.name;
+        if(region) lastRegion = region.properties.name_de || region.properties.name;
+        
+        document.getElementById('locCity').innerText = lastCity;
+        document.getElementById('locRegion').innerText = lastRegion;
+        const metaEl = document.getElementById('locMeta');
+        if (metaEl) metaEl.innerText = lastMetaLine || '';
+    }
+
+    async function calcData() {
+        const durSel = parseInt(document.getElementById('targetDuration').value);
+        // NOTE: "Echtzeit" can easily mean hours and would freeze the browser if we try to generate millions of samples.
+        // Therefore we cap realtime rendering to 60 minutes by default (still slow enough for long trips, but feasible).
+        const REALTIME_CAP_SEC = 3600;
+        let dur = durSel;
+        let realtimeCappedMsg = "";
+
+        if (durSel === 0) {
+            let estDriveMs = null;
+
+            if (activeSub === 'file') {
+                const stVal = document.getElementById('startTime')?.value;
+                const enVal = document.getElementById('endTime')?.value;
+                const stMs = stVal ? new Date(stVal).getTime() : null;
+                const enMs = enVal ? new Date(enVal).getTime() : null;
+                if (stMs != null && enMs != null && isFinite(stMs) && isFinite(enMs) && enMs > stMs) {
+                    estDriveMs = enMs - stMs;
+                }
+            } else {
+                // planned route: use Directions duration if present (routeMeta), else estimate 80 km/h
+                if (routeMeta && routeMeta.durationSec) estDriveMs = Math.round(routeMeta.durationSec * 1000);
+                // length-based estimate is done after len is known; we fill later if still null
+            }
+
+            // Temporarily set dur; if we still don't know, we will decide after "len" is computed.
+            dur = (estDriveMs != null) ? Math.max(1, Math.round(estDriveMs / 1000)) : 0;
+        }
+        let src=null;
+        
+        if(activeSub==='file') {
+            const pts=extractPts(); 
+            if(pts.length<2) return false;
+            const sm=[]; let w=2;
+            for(let i=0;i<pts.length;i++) {
+                let x=0,y=0,c=0;
+                for(let j=Math.max(0,i-w);j<=Math.min(pts.length-1,i+w);j++){ x+=pts[j].lng; y+=pts[j].lat; c++; }
+                sm.push([x/c,y/c]);
+            }
+            src=turf.lineString(sm);
+        
+} else {
+    // Plan mode: if the user has not pressed "Berechnen" yet, we still want recording to work.
+    // We try Directions silently once and fall back to a straight line if needed.
+    const okPlan = await ensurePlanRouteGeometry({ allowFallback: true });
+    if (!okPlan || !routeGeometry) return false;
+    src = { type: 'Feature', geometry: routeGeometry };
+}
+const len=turf.length(src,{units:'kilometers'});
+        // Determine effective render duration (seconds).
+        // - For normal modes: durSel is the target video duration.
+        // - For "Echtzeit": we use the selected time range (file) / route duration (plan), but cap to REALTIME_CAP_SEC.
+        if (durSel === 0) {
+            let estSec = dur; // may be 0 if unknown yet
+            if (!estSec || !isFinite(estSec) || estSec <= 0) {
+                // fallback estimate from length (80 km/h)
+                estSec = (len > 0) ? Math.round((len / 80) * 3600) : REALTIME_CAP_SEC;
+            }
+            if (estSec > REALTIME_CAP_SEC) {
+                realtimeCappedMsg = `Echtzeit zu lang (${Math.round(estSec/60)} Min) → auf 60 Min begrenzt.`;
+                estSec = REALTIME_CAP_SEC;
+            } else {
+                realtimeCappedMsg = `Echtzeit: ${Math.round(estSec/60)} Min.`;
+            }
+            dur = Math.max(1, estSec);
+        }
+
+        // Cap absolute frames to keep the browser responsive.
+        const MAX_FRAMES = 120000; // ~66 min @ 30fps
+        let desiredFrames = Math.max(2, Math.round(dur * 30));
+        if (desiredFrames > MAX_FRAMES) {
+            realtimeCappedMsg = realtimeCappedMsg || `Zu viele Frames (${desiredFrames}) → reduziert auf ${MAX_FRAMES}.`;
+            desiredFrames = MAX_FRAMES;
+            dur = Math.max(1, Math.round(desiredFrames / 30));
+        }
+
+        // Step size along route so that we get ~desiredFrames samples.
+        let step = (len > 0) ? (len / (desiredFrames - 1)) : 0.01;
+const steps=Math.floor(len/step);
+        
+        processedPoints=[];
+        for(let i=0; i<=steps; i++) {
+            const p=turf.along(src, i*step, {units:'kilometers'});
+            processedPoints.push({lng:p.geometry.coordinates[0], lat:p.geometry.coordinates[1], km: Math.min(len, i*step)});
+        }
+
+        cameraPoints=[];
+        for(let i=0; i<processedPoints.length; i++) {
+            let next = processedPoints[Math.min(i+5, processedPoints.length-1)];
+            processedPoints[i].bearing = computeBearingDeg(processedPoints[i].lng, processedPoints[i].lat, next.lng, next.lat);
+            
+            let cx=0, cy=0, cc=0; let cw=30;
+            for(let j=Math.max(0,i-cw); j<=Math.min(processedPoints.length-1,i+cw); j++) {
+                cx+=processedPoints[j].lng; cy+=processedPoints[j].lat; cc++;
+            }
+            cameraPoints.push({lng:cx/cc, lat:cy/cc});
+        }
+        
+
+        // --- 3D bearing smoothing (pre-turn & post-turn) ---
+        // We look a bit ahead on the route and smooth bearings with a circular moving average.
+        // This prevents abrupt "standstill + hard swivel" turns on curves in 3D mode.
+        if (processedPoints.length > 2) {
+            const n = processedPoints.length;
+            const LOOK = Math.max(8, Math.min(30, Math.round(n / 6000)));   // look-ahead in frames (adaptive)
+            const W    = Math.max(10, Math.min(45, Math.round(n / 4000)));  // smoothing half-window (adaptive)
+            const lead = new Float32Array(n);
+
+            for (let i = 0; i < n; i++) {
+                const j = Math.min(n - 1, i + LOOK);
+                const a = processedPoints[i];
+                const b = processedPoints[j];
+                lead[i] = computeBearingDeg(a.lng, a.lat, b.lng, b.lat);
+            }
+
+            const pad = W;
+            const size = 2 * W + 1;
+            const sinArr = new Float64Array(n + 2 * pad);
+            const cosArr = new Float64Array(n + 2 * pad);
+
+            const fill = (k, deg) => {
+                const r = deg * Math.PI / 180;
+                sinArr[k] = Math.sin(r);
+                cosArr[k] = Math.cos(r);
+            };
+
+            // pad start
+            for (let k = 0; k < pad; k++) fill(k, lead[0]);
+            for (let i = 0; i < n; i++) fill(pad + i, lead[i]);
+            // pad end
+            for (let k = 0; k < pad; k++) fill(pad + n + k, lead[n - 1]);
+
+            let sumS = 0, sumC = 0;
+            for (let k = 0; k < size; k++) { sumS += sinArr[k]; sumC += cosArr[k]; }
+
+            for (let i = 0; i < n; i++) {
+                const sm = Math.atan2(sumS, sumC) * 180 / Math.PI;
+                processedPoints[i].bearing = ((sm + 540) % 360) - 180;
+
+                const outK = i;
+                const inK = i + size;
+                if (inK < sinArr.length) {
+                    sumS += sinArr[inK] - sinArr[outK];
+                    sumC += cosArr[inK] - cosArr[outK];
+                }
+            }
+        }
+
+        // --- time & meta mapping (for HUD) ---
+        const totalKm = len || 0;
+        let driveTotalMs = null;
+
+        // File mode: use selected start/end datetime as "real drive time".
+        if (activeSub === 'file') {
+            const stVal = document.getElementById('startTime')?.value;
+            const enVal = document.getElementById('endTime')?.value;
+            const stMs = stVal ? new Date(stVal).getTime() : null;
+            const enMs = enVal ? new Date(enVal).getTime() : null;
+            if (stMs != null && enMs != null && isFinite(stMs) && isFinite(enMs) && enMs > stMs) {
+                renderClockStartMs = stMs;
+                driveTotalMs = enMs - stMs;
+            }
+        } else {
+            // Planned route: prefer Directions duration if available; else estimate via 80 km/h.
+            if (routeMeta && routeMeta.durationSec) driveTotalMs = Math.round(routeMeta.durationSec * 1000);
+            else if (totalKm > 0) driveTotalMs = Math.round((totalKm / 80) * 3600 * 1000);
+            // Use "now" as clock base if user wants a clock
+            if (renderClockStartMs == null) renderClockStartMs = Date.now();
+        }
+
+        if (driveTotalMs != null && totalKm > 0) {
+            for (const pp of processedPoints) {
+                const t = Math.min(1, Math.max(0, (pp.km || 0) / totalKm));
+                pp.elapsedMs = Math.round(t * driveTotalMs);
+                pp.tMs = (renderClockStartMs != null) ? (renderClockStartMs + pp.elapsedMs) : null;
+            }
+        } else {
+            // at least fill km
+            for (const pp of processedPoints) {
+                pp.elapsedMs = null;
+                pp.tMs = (renderClockStartMs != null) ? renderClockStartMs : null;
+            }
+        }
+
+
+        // Store meta timeline for HUD (robust fallback)
+        metaTimeline.totalKm = totalKm || 0;
+        metaTimeline.driveTotalMs = driveTotalMs;
+        metaTimeline.clockStartMs = renderClockStartMs;
+
+
+        if (realtimeCappedMsg) {
+            try { document.getElementById('status').innerText = realtimeCappedMsg; } catch (e) {}
+            try { document.getElementById('timeEstimate').innerText = realtimeCappedMsg; } catch (e) {}
+        }
+
+        return true;
+    }
+
+    async function preRender(type) {
+        if (!map) return alert("Bitte zuerst Mapbox Token eingeben.");
+        if (isRecording) return;
+
+        document.getElementById('status').innerText = "Berechne...";
+        const ok = await calcData();
+        if (!ok) {
+    recordingState.active = false;
+    recordingState.composite = false;
+
+    toggleUI(true);
+            return alert("Keine Daten/Route gefunden!");
+        }
+
+        toggleUI(false);
+        await sleep(500);
+
+        const zoom = parseFloat(document.getElementById('renderZoom').value);
+        await startRenderProcess(type, zoom);
+    }
+
+    async function startRenderProcess(type, zoom) {
+        isRecording = true;
+        try {
+            const is2D = (type === '2d');
+            const styleUrl = is2D
+                ? document.getElementById('mapStyle2D').value
+                : (document.getElementById('mapStyle3D')?.value || "mapbox://styles/mapbox/satellite-streets-v12");
+
+            document.getElementById('status').innerText = (is2D ? "2D Stil laden..." : "3D Stil laden...");
+            await setMapStyleSafely(styleUrl);
+
+            // After a style switch, custom sources/layers/images are gone – re-create them.
+            await ensureLayersExist({ restoreData: false });
+
+            // Re-apply route geometry (style change resets source data)
+            const geo = buildRouteFeature(processedPoints);
+            if (map.getSource('route')) map.getSource('route').setData(geo);
+
+            // Ensure correct marker rendering for the mode
+            
+            // 2D micro-stutter reduction: mercator projection + no terrain
+            if (is2D) {
+                try { map.setProjection && map.setProjection('mercator'); } catch (e) {}
+                try { map.setTerrain && map.setTerrain(null); } catch (e) {}
+            } else {
+                try { map.setProjection && map.setProjection('globe'); } catch (e) {}
+                try { if (map.getSource('dem')) map.setTerrain({ source: 'dem', exaggeration: 1.5 }); } catch (e) {}
+            }
+
+if (is2D) {
+                // Prefer car symbol marker if available, otherwise fall back to circle.
+                if (map.getLayer('marker-s')) {
+                    try { map.setLayoutProperty('marker-s', 'visibility', 'visible'); } catch (e) {}
+                    try { if (map.getLayer('marker-c')) map.setLayoutProperty('marker-c', 'visibility', 'none'); } catch (e) {}
+                } else {
+                    // Circle marker is bulletproof (no external images required)
+                    if (!map.getLayer('marker-c')) {
+                        try {
+                            map.addLayer({
+                                id: 'marker-c',
+                                type: 'circle',
+                                source: 'marker',
+                                paint: {
+                                    'circle-radius': 8,
+                                    'circle-color': '#d63031',
+                                    'circle-stroke-width': 2,
+                                    'circle-stroke-color': '#fff'
+                                }
+                            });
+                        } catch (e) {}
+                    }
+                    try { map.setLayoutProperty('marker-c', 'visibility', 'visible'); } catch (e) {}
+                }
+                map.setPitch(0);
+            } else {
+                // Prefer symbol marker if car icon exists, otherwise fall back to circle
+                try { if (map.getLayer('marker-c')) map.setLayoutProperty('marker-c', 'visibility', 'none'); } catch (e) {}
+                if (map.getLayer('marker-s')) {
+                    try { map.setLayoutProperty('marker-s', 'visibility', 'visible'); } catch (e) {}
+                } else {
+                    if (!map.getLayer('marker-c')) {
+                        try {
+                            map.addLayer({
+                                id: 'marker-c',
+                                type: 'circle',
+                                source: 'marker',
+                                paint: {
+                                    'circle-radius': 7,
+                                    'circle-color': '#d63031',
+                                    'circle-stroke-width': 2,
+                                    'circle-stroke-color': '#fff'
+                                }
+                            });
+                        } catch (e) {}
+                    }
+                    try { map.setLayoutProperty('marker-c', 'visibility', 'visible'); } catch (e) {}
+                }
+                map.setPitch(60);
+            }
+            const __stability = beginRenderStability(type, zoom);
+            try {
+                await runRecordLoop(type, zoom);
+            } finally {
+                restoreRenderStability(__stability);
+            }
+        } catch (err) {
+            console.error(err);
+            toggleUI(true);
+            document.getElementById('status').innerText = "Fehler (siehe Konsole).";
+            alert("Fehler beim Rendern. Details in der Browser-Konsole.");
+        } finally {
+            isRecording = false;
+        }
+    }
+
+    function getOrCreateRecordCanvas() {
+        if (!map) return null;
+        const src = map.getCanvas();
+        if (!recordCanvas) {
+            recordCanvas = document.createElement('canvas');
+            recordCanvas.style.position = 'absolute';
+            recordCanvas.style.left = '-99999px';
+            recordCanvas.style.top = '-99999px';
+            document.body.appendChild(recordCanvas);
+            recordCtx = recordCanvas.getContext('2d', { alpha: true });
+        }
+        // Match backing store size (device pixels)
+        if (recordCanvas.width !== src.width || recordCanvas.height !== src.height) {
+            recordCanvas.width = src.width;
+            recordCanvas.height = src.height;
+        }
+        return recordCanvas;
+    }
+
+    function drawSmartInfoOverlay(ctx, w, h) {
+        // Draw a "Smart Info Box" into the recorded canvas (so it ends up in the video)
+        const dpr = window.devicePixelRatio || 1;
+        const city = (lastCity || '').trim();
+        const region = (lastRegion || '').trim();
+        let meta = (lastMetaLine || '').trim();
+        if (recordingState && recordingState.active && recordingState.totalFrames) {
+            try {
+                meta = buildMetaLine(null, recordingState.frameIndex || 0, recordingState.totalFrames).trim();
+                lastMetaLine = meta;
+            } catch (e) {}
+        }
+        if (!city && !region && !meta) return;
+
+        const pad = Math.round(14 * dpr);
+        const margin = Math.round(34 * dpr);
+        const accentW = Math.round(5 * dpr);
+        const r = Math.round(6 * dpr);
+
+        // Fonts
+        const cityFontPx = Math.round(28 * dpr);
+        const regionFontPx = Math.round(15 * dpr);
+        const metaFontPx = Math.round(14 * dpr);
+
+        ctx.save();
+        ctx.textBaseline = 'top';
+
+        // Measure
+        ctx.font = `700 ${cityFontPx}px Segoe UI, system-ui, sans-serif`;
+        const cityW = city ? ctx.measureText(city).width : 0;
+
+        ctx.font = `600 ${regionFontPx}px Segoe UI, system-ui, sans-serif`;
+        const regionW = region ? ctx.measureText(region.toUpperCase()).width : 0;
+
+        ctx.font = `600 ${metaFontPx}px ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace`;
+        const metaW = meta ? ctx.measureText(meta).width : 0;
+
+        const contentW = Math.max(cityW, regionW, metaW);
+        const targetW = Math.min(Math.max(contentW + pad * 2, 220 * dpr), w - margin * 2);
+
+        // Stabilize box width (avoid "breathing" when text length changes): never shrink during recording
+        let boxW = targetW;
+        if (recordingState && recordingState.active) {
+            const prevW = recordingState._overlayBoxW || 0;
+            recordingState._overlayBoxW = Math.max(prevW, targetW);
+            boxW = recordingState._overlayBoxW;
+        }
+const gapCityRegion = Math.round(4 * dpr);
+        const gapRegionMeta = Math.round(8 * dpr);
+
+        const boxH = pad * 2
+            + (city ? cityFontPx : 0)
+            + (region ? (gapCityRegion + regionFontPx) : 0)
+            + (meta ? (gapRegionMeta + metaFontPx) : 0);
+
+        const x = w - margin - boxW;
+        const y = h - margin - boxH;
+
+        // Box
+        ctx.fillStyle = 'rgba(0,0,0,0.68)';
+        roundRect(ctx, x, y, boxW, boxH, r);
+        ctx.fill();
+
+        // Accent bar
+        ctx.fillStyle = 'rgba(0,122,204,0.95)';
+        roundRect(ctx, x, y, accentW, boxH, r);
+        ctx.fill();
+
+        // Text
+        let tx = x + pad + accentW;
+        let ty = y + pad;
+
+        if (city) {
+            ctx.fillStyle = 'rgba(255,255,255,0.98)';
+            ctx.font = `700 ${cityFontPx}px Segoe UI, system-ui, sans-serif`;
+            ctx.fillText(city, tx, ty);
+            ty += cityFontPx;
+        }
+
+        if (region) {
+            ty += gapCityRegion;
+            ctx.fillStyle = 'rgba(255,255,255,0.85)';
+            ctx.font = `600 ${regionFontPx}px Segoe UI, system-ui, sans-serif`;
+            ctx.fillText(region.toUpperCase(), tx, ty);
+            ty += regionFontPx;
+        }
+
+        if (meta) {
+            ty += gapRegionMeta;
+            ctx.fillStyle = 'rgba(230,230,230,0.95)';
+            ctx.font = `600 ${metaFontPx}px ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace`;
+            ctx.fillText(meta, tx, ty);
+        }
+
+        ctx.restore();
+    }
+
+    function roundRect(ctx, x, y, w, h, r) {
+        const rr = Math.min(r, w / 2, h / 2);
+        ctx.beginPath();
+        ctx.moveTo(x + rr, y);
+        ctx.arcTo(x + w, y, x + w, y + h, rr);
+        ctx.arcTo(x + w, y + h, x, y + h, rr);
+        ctx.arcTo(x, y + h, x, y, rr);
+        ctx.arcTo(x, y, x + w, y, rr);
+        ctx.closePath();
+    }
+
+        function drawCompositeFrame({ includeSmartInfo = true } = {}) {
+        if (!map) return false;
+        const src = map.getCanvas();
+        const out = getOrCreateRecordCanvas();
+        if (!out || !recordCtx) return false;
+
+        try {
+            recordCtx.clearRect(0, 0, out.width, out.height);
+            recordCtx.drawImage(src, 0, 0);
+        } catch (e) {
+            console.warn('Composite drawImage failed (likely CORS / WebGL readback blocked). Falling back.', e);
+            return false;
+        }
+
+        if (includeSmartInfo) {
+            try { drawSmartInfoOverlay(recordCtx, out.width, out.height); } catch (e) {}
+        }
+        return true;
+    }
+
+    async function warmUpTilesAlongRoute(zoom, { samples = 24, maxTotalMs = 6000, waitRenderMs = 550, waitTilesMs = 750 } = {}) {
+        // Preload tiles along the route BEFORE recording.
+        // Goal: reduce irregular micro-stutter caused by late tile/label loads.
+        if (!map || !processedPoints || processedPoints.length < 2) return;
+
+        const t0 = performance.now();
+        const n = processedPoints.length;
+
+        // Auto-bump samples based on route length (more points => more area covered)
+        let S = samples;
+        const auto = Math.max(18, Math.min(46, Math.round(n / 90)));
+        S = Math.max(S, auto);
+        S = Math.min(S, n);
+
+        const picks = [];
+        for (let i = 0; i < S; i++) {
+            const idx = Math.floor((i / Math.max(1, S - 1)) * (n - 1));
+            picks.push(idx);
+        }
+
+        // Add a few "mid" picks (helps when the route bends a lot)
+        for (let i = 1; i < S - 1; i += 4) {
+            const a = picks[i - 1], b = picks[i];
+            const mid = Math.floor((a + b) / 2);
+            if (!picks.includes(mid)) picks.push(mid);
+        }
+        picks.sort((a, b) => a - b);
+
+        for (const idx of picks) {
+            if (performance.now() - t0 > maxTotalMs) break;
+            const p = processedPoints[idx];
+            map.jumpTo({ center: [p.lng, p.lat], zoom, pitch: 0, bearing: 0 });
+            try { map.triggerRepaint(); } catch (e) {}
+            // Don't block forever – short, capped waits
+            await waitForRender(waitRenderMs);
+            await waitForTiles(waitTilesMs);
+        }
+    }
+
+    function getNameFromProps(props) {
+        if (!props) return '';
+        return (props.name_de || props['name:de'] || props.name || props['name:en'] || '').toString().trim();
+    }
+
+        // --- Label query helpers (performance) ---
+    let _labelQueryLayerIds = null;
+    let _labelQueryLayerKey = null;
+
+    function getLabelQueryLayers() {
+        if (!map) return null;
+        try {
+            const style = map.getStyle && map.getStyle();
+            const key = (style && style.sprite) ? style.sprite : (currentStyleURL || '');
+            if (_labelQueryLayerIds && _labelQueryLayerKey === key) return _labelQueryLayerIds;
+
+            const layers = (style && style.layers) ? style.layers : [];
+            // Typical Mapbox layer ids: place-label, settlement-label, country-label, state-label, etc.
+            const rx = /(country|state|province|region|admin|place|settlement|locality|village|town|city).*(label|name)/i;
+
+            const ids = layers
+                .filter(l => l && l.type === 'symbol' && l.id && rx.test(l.id))
+                .map(l => l.id);
+
+            _labelQueryLayerIds = ids.length ? ids : null;
+            _labelQueryLayerKey = key;
+            return _labelQueryLayerIds;
+        } catch (e) {
+            _labelQueryLayerIds = null;
+            _labelQueryLayerKey = null;
+            return null;
+        }
+    }
+
+    function metersPerPixelAtLatZoom(lat, zoom) {
+        const rad = lat * Math.PI / 180;
+        return 156543.03392 * Math.cos(rad) / Math.pow(2, zoom);
+    }
+
+    function kmToPixelRadius(km, lngLat, zoom) {
+        const mpp = metersPerPixelAtLatZoom(lngLat.lat, zoom);
+        return (km * 1000) / (mpp || 1);
+    }
+
+function pickNearbyPlace(lngLat) {
+        // Uses primarily local rendered features; optional reverse geocode may kick in (very low rate).
+        // Goal: prefer larger nearby places (town/city) + show admin2/admin1/country.
+        try {
+            const z = map.getZoom();
+            // Search radius ~70km, clamped to avoid huge feature queries at higher zooms.
+            const padPx = Math.max(90, Math.min(420, kmToPixelRadius(70, lngLat, z)));
+            const ptScreen = map.project([lngLat.lng, lngLat.lat]);
+            const bbox = [[ptScreen.x - padPx, ptScreen.y - padPx], [ptScreen.x + padPx, ptScreen.y + padPx]];
+            const layers = getLabelQueryLayers();
+            const feats = map.queryRenderedFeatures(bbox, layers ? { layers } : undefined) || [];
+            const here = turf.point([lngLat.lng, lngLat.lat]);
+
+            const isPoint = (f) => f && f.geometry && (f.geometry.type === 'Point' || f.geometry.type === 'MultiPoint');
+            const coordOf = (f) => {
+                if (!isPoint(f)) return null;
+                const c = (f.geometry.type === 'Point') ? f.geometry.coordinates : (f.geometry.coordinates[0] || null);
+                if (!c || c.length < 2) return null;
+                return c;
+            };
+
+            const classScore = (cls) => {
+                const c = (cls || '').toString().toLowerCase();
+                if (c.includes('city') || c.includes('capital')) return 6;
+                if (c.includes('town')) return 5;
+                if (c.includes('suburb')) return 4;
+                if (c.includes('village')) return 2;
+                if (c.includes('hamlet')) return 1;
+                if (c.includes('neighbour') || c.includes('neighborhood')) return 1;
+                return 0;
+            };
+
+            const places = [];
+            const admin2 = [];
+            const admin1 = [];
+            const countries = [];
+
+            for (const f of feats) {
+                const name = getNameFromProps(f.properties);
+                if (!name) continue;
+
+                const id = (f.layer && f.layer.id) ? f.layer.id.toLowerCase() : '';
+                const cls = (f.properties && (f.properties.class || f.properties.type)) ? (f.properties.class || f.properties.type) : '';
+                const coords = coordOf(f);
+
+                let distKm = 999;
+                if (coords) {
+                    distKm = turf.distance(here, turf.point(coords), { units: 'kilometers' });
+                }
+
+                if (id.includes('country')) countries.push({ name, distKm });
+                if (id.includes('county') || id.includes('district')) admin2.push({ name, distKm });
+                else if (id.includes('state') || id.includes('region') || id.includes('province') || id.includes('admin-1')) admin1.push({ name, distKm });
+                else if (id.includes('admin') && !id.includes('boundary')) admin1.push({ name, distKm });
+
+                if (id.includes('place') || id.includes('settlement') || id.includes('locality') || id.includes('label')) {
+                    const sc = classScore(cls);
+                    const sr = Number(f.properties?.scalerank ?? f.properties?.rank ?? 99);
+                    places.push({
+                        name,
+                        distKm,
+                        score: sc,
+                        scalerank: isFinite(sr) ? sr : 99,
+                        cls,
+                        id
+                    });
+                }
+            }
+
+            countries.sort((a, b) => a.distKm - b.distKm);
+            admin2.sort((a, b) => a.distKm - b.distKm);
+            admin1.sort((a, b) => a.distKm - b.distKm);
+
+            const country = countries[0]?.name || '';
+            const a2 = admin2.find(r => r.distKm <= 250)?.name || admin2[0]?.name || '';
+            const a1 = admin1.find(r => r.distKm <= 400)?.name || admin1[0]?.name || '';
+
+            // Place selection: prefer city/town within 80km.
+            const within80 = places.filter(p => p.distKm <= 80);
+
+            const townOrCity = within80.filter(p => p.score >= 5);
+            const suburbOrBetter = within80.filter(p => p.score >= 4);
+
+            // Prefer a "nearby bigger place" band (roughly 12–80 km) to avoid tiny villages right under the cursor.
+            const band = townOrCity.filter(p => p.distKm >= 12 && p.distKm <= 80);
+            const list = band.length ? band : (townOrCity.length ? townOrCity : (suburbOrBetter.length ? suburbOrBetter : (within80.length ? within80 : places)));
+
+            // De-dupe by name (keep the best instance)
+            const bestByName = new Map();
+            for (const p of list) {
+                const key = p.name;
+                const prev = bestByName.get(key);
+                if (!prev) bestByName.set(key, p);
+                else {
+                    // keep higher score / bigger / nearer
+                    const prevKey = (prev.score * 1000) - (prev.scalerank * 10) - prev.distKm;
+                    const curKey = (p.score * 1000) - (p.scalerank * 10) - p.distKm;
+                    if (curKey > prevKey) bestByName.set(key, p);
+                }
+            }
+            const list2 = Array.from(bestByName.values());
+
+            list2.sort((a, b) => {
+                if (b.score !== a.score) return b.score - a.score;                   // larger class first
+                if (a.scalerank !== b.scalerank) return a.scalerank - b.scalerank; // lower scalerank = bigger
+                return a.distKm - b.distKm;                                         // then nearer
+            });
+
+            const top = list2[0] || null;
+            const place = top?.name || '';
+            const placeDist = top?.distKm ?? 999;
+            const placeScore = top?.score ?? 0;
+
+            // If far away, hint it's "near"
+            let placeLabel = place ? (placeDist > 10 ? `Nähe ${place}` : place) : '';
+
+            // If we only found tiny stuff, prefer admin2 (Landkreis/Bezirk/Provincia…)
+            if ((!placeLabel || placeScore <= 2) && a2) placeLabel = a2;
+
+            return { city: placeLabel, admin2: a2, admin1: a1, country: (resolvedGeo.country || ''), _countryLocal: country, _placeScore: placeScore, _placeDist: placeDist };
+        } catch (e) {
+            return { city: '', admin2: '', admin1: '', country: (resolvedGeo.country || ''), _countryLocal: '', _placeScore: 0, _placeDist: 999 };
+        }
+    }
+
+    function updateGeoInfoAt(lngLat) {
+        if (!map) return;
+
+        // Throttle: avoid spamming heavy feature queries
+        const now = performance.now();
+        const lastT = lastGeoQuery.t || 0;
+        if (now - lastT < 1200) return;
+
+        try {
+            const d = turf.distance(
+                turf.point([lngLat.lng, lngLat.lat]),
+                turf.point([lastGeoQuery.lng || lngLat.lng, lastGeoQuery.lat || lngLat.lat]),
+                { units: 'kilometers' }
+            );
+            if (d < 6 && now - lastT < 2500) return;
+        } catch (e) {}
+
+        lastGeoQuery = { t: now, lng: lngLat.lng, lat: lngLat.lat };
+
+        const ctx = pickNearbyPlace(lngLat);
+
+        // Remember last query position/time (used for throttling)
+        lastGeoQuery.t = now;
+        lastGeoQuery.lng = lngLat.lng;
+        lastGeoQuery.lat = lngLat.lat;
+
+        const isPlaceholder = (v) => {
+            const t = (v || '').toString().trim();
+            return !t || t === '—' || /^start\.\.\.$/i.test(t) || /^suche\.\.\.$/i.test(t);
+        };
+
+        // City line: prefer "nearby bigger place" (local rendered labels), but fall back to reverse-geocoded place/admin.
+        let city = (ctx.city || '').trim();
+        if (!city && (resolvedGeo.city || '').trim()) city = (resolvedGeo.city || '').trim();
+
+        // If local pick is weak/empty, fall back to admin2/admin1 (Landkreis/Bezirk/Provincia…)
+        if (!city || (ctx._placeScore ?? 0) <= 2) {
+            const a2 = (ctx.admin2 || resolvedGeo.admin2 || '').trim();
+            const a1 = (ctx.admin1 || resolvedGeo.admin1 || '').trim();
+            if (a2) city = a2;
+            else if (a1) city = a1;
+        }
+
+        // If we still have nothing meaningful, keep previous value (even "Start..."), so we never show a bare dash.
+        if (!city) city = (lastCity || '').trim();
+        if (!city) city = 'Start...';
+
+        
+        lastCity = city;
+// Region line: prefer reverse-geocoded admin/country (more reliable than viewport country labels)
+        const regionParts = [];
+        const admin2 = (ctx.admin2 || resolvedGeo.admin2 || '').trim();
+        const admin1 = (ctx.admin1 || resolvedGeo.admin1 || '').trim();
+        const country = (resolvedGeo.country || '').trim() || (ctx.country || '').trim(); // fallback only
+
+        if (admin2) regionParts.push(admin2);
+        if (admin1 && admin1 !== admin2) regionParts.push(admin1);
+        if (country) regionParts.push(country);
+
+        const region = regionParts.join(' · ');
+
+        if (city) lastCity = city;
+        if (region) lastRegion = region;
+
+        // Update on-screen box (preview)
+        {
+            try {
+                document.getElementById('locCity').innerText = lastCity || '';
+                document.getElementById('locRegion').innerText = lastRegion || '';
+                const metaEl = document.getElementById('locMeta');
+                if (metaEl) metaEl.innerText = lastMetaLine || '';
+            } catch (e) {}
+        }
+
+        // Optional: very low-rate reverse geocode fallback (helps near borders / when labels are tiny)
+        try { maybeScheduleReverseGeocode(lngLat, ctx); } catch (e) {}
+    }
+
+    // --- Optional reverse geocode fallback (VERY LOW RATE) ---
+    // Only used if rendered labels are too small/unhelpful. Caches results to keep costs low.
+    let geocodeState = { t: 0, lng: 0, lat: 0, inFlight: false };
+    const geocodeCache = new Map();
+    // Resolved admin/country (from reverse geocode). We trust this more than distant viewport labels.
+    let resolvedGeo = { city: '', admin2: '', admin1: '', country: '' };
+
+    function geocodeCacheKey(lngLat) {
+        // ~0.2° grid -> ~15–22km depending on latitude (keeps cache small)
+        const q = (v) => (Math.round(v * 5) / 5).toFixed(1);
+        return `${q(lngLat.lng)},${q(lngLat.lat)}`;
+    }
+
+    function maybeScheduleReverseGeocode(lngLat, localCtx) {
+        if (!mapboxgl || !mapboxgl.accessToken) return;
+        if (geocodeState.inFlight) return;
+
+        const now = performance.now();
+        if (now - (geocodeState.t || 0) < 15000) return; // at most ~1 request / 15s
+
+        // Trigger conditions (keep costs low):
+        // - if we don't yet have a reliable country/admin from geocode,
+        // - or if the locally inferred country label disagrees (can happen near borders due to label anchor points),
+        // - or if our place/admin pick is "weak" (tiny villages / missing admin).
+        const weakPlace = (localCtx?._placeScore ?? 0) <= 3;
+        const weakAdmin = !(localCtx?.admin2 || localCtx?.admin1);
+        const needsAdmin = !(resolvedGeo.admin2 || resolvedGeo.admin1);
+        const needsCountry = !resolvedGeo.country;
+
+        const localCountry = ((localCtx?._countryLocal || localCtx?.country) || '').trim();
+        const suspectCountry = (localCountry && resolvedGeo.country && localCountry !== resolvedGeo.country);
+
+        if (!weakPlace && !weakAdmin && !needsAdmin && !needsCountry && !suspectCountry) return;
+
+        // Only if we moved a bit (avoid repeated same-spot calls)
+        try {
+            const moved = turf.distance(
+                turf.point([lngLat.lng, lngLat.lat]),
+                turf.point([geocodeState.lng || lngLat.lng, geocodeState.lat || lngLat.lat]),
+                { units: 'kilometers' }
+            );
+            if (moved < 20 && now - (geocodeState.t || 0) < 30000) return;
+        } catch (e) {}
+
+        const key = geocodeCacheKey(lngLat);
+        if (geocodeCache.has(key)) {
+            const cached = geocodeCache.get(key);
+            applyGeocodeContext(cached);
+            geocodeState = { t: now, lng: lngLat.lng, lat: lngLat.lat, inFlight: false };
+            return;
+        }
+
+        geocodeState.inFlight = true;
+        geocodeState.t = now;
+        geocodeState.lng = lngLat.lng;
+        geocodeState.lat = lngLat.lat;
+
+        void reverseGeocodeContext(lngLat).then(ctx => {
+            if (!ctx) return;
+            geocodeCache.set(key, ctx);
+            // Prevent unbounded growth
+            if (geocodeCache.size > 600) geocodeCache.clear();
+            applyGeocodeContext(ctx);
+        }).catch(() => {}).finally(() => { geocodeState.inFlight = false; });
+    }
+
+    async function reverseGeocodeContext(lngLat) {
+        try {
+            const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${lngLat.lng},${lngLat.lat}.json?types=place,district,region,country&language=de&limit=6&access_token=${mapboxgl.accessToken}`;
+            const res = await fetch(url);
+            if (!res.ok) return null;
+            const data = await res.json();
+            const out = { city: '', admin2: '', admin1: '', country: '' };
+
+            const feats = Array.isArray(data?.features) ? data.features : [];
+            for (const f of feats) {
+                const pt = Array.isArray(f?.place_type) ? f.place_type : [];
+                const name = (f?.text_de || f?.text || f?.place_name_de || f?.place_name || '').split(',')[0].trim();
+                if (!name) continue;
+
+                // City: Mapbox may return either "place" (town/city) OR "locality" (smaller but still useful).
+                if (!out.city && (pt.includes('place') || pt.includes('locality'))) out.city = name;
+                // Last-resort city fallback (kept low priority): neighborhood can be better than an empty line.
+                if (!out.city && pt.includes('neighborhood')) out.city = name;
+
+                // Admin hierarchy
+                if (!out.admin2 && pt.includes('district')) out.admin2 = name;
+                if (!out.admin1 && pt.includes('region')) out.admin1 = name;
+                if (!out.country && pt.includes('country')) out.country = name;
+            }
+
+            // Fallback: sometimes district is missing – keep region/country at least
+            // If Mapbox didn't give a 'place/locality' at this coordinate, fall back to admin.
+            if (!out.city) out.city = out.admin2 || out.admin1 || '';
+            return out;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function applyGeocodeContext(ctx) {
+        if (!ctx) return;
+
+        // Store resolved admin/country from reverse geocode (reliable at borders)
+        resolvedGeo = {
+            city: ctx.city || resolvedGeo.city,
+            admin2: ctx.admin2 || resolvedGeo.admin2,
+            admin1: ctx.admin1 || resolvedGeo.admin1,
+            country: ctx.country || resolvedGeo.country
+        };
+
+        // Update region line immediately; city line remains driven by local label pick (better "nearby big city" logic)
+// If we still show a placeholder (e.g. "Start..."), use reverse-geocoded city as a safe fallback.
+        try {
+            const fallbackCity = (resolvedGeo.city || '').trim();
+            if (fallbackCity && (!lastCity || /^start\.\.\.$/i.test((lastCity || '').trim()) || (lastCity || '').trim() === '—')) {
+                lastCity = fallbackCity;
+                document.getElementById('locCity').innerText = lastCity || '';
+            }
+        } catch (e) {}
+
+        const parts = [];
+        const a2 = (resolvedGeo.admin2 || '').trim();
+        const a1 = (resolvedGeo.admin1 || '').trim();
+        const co = (resolvedGeo.country || '').trim();
+
+        if (a2) parts.push(a2);
+        if (a1 && a1 !== a2) parts.push(a1);
+        if (co) parts.push(co);
+
+        const region = parts.join(' · ');
+        if (region) lastRegion = region;
+
+        try {
+            document.getElementById('locRegion').innerText = lastRegion || '';
+        } catch (e) {}
+    }
+
+
+
+    // Keep the old function name for the UI (center-based)
+    function updateGeoInfo() {
+        try {
+            const c = map.getCenter();
+            updateGeoInfoAt({ lng: c.lng, lat: c.lat });
+        } catch (e) {}
+    }
+    async function runRecordLoop(type, zoom) {
+    let __rec = null;
+    try {
+    const is2D = (type === '2d');
+    const prefix = is2D ? '2D' : '3D';
+    const fps = 30;
+    const frameMs = 1000 / fps;
+
+    // 2D: pre-warm tiles to reduce irregular micro-stutter
+    if (is2D) await warmUpTilesAlongRoute(zoom);
+
+    let animPoints = processedPoints;
+
+    // Anti-"Schwimmen" nur bei WEIT / WELT (2D):
+    // - DDA-Quantisierung in World-Pixeln verhindert Round()-Ping-Pong (oft als "vertikales Schwimmen" sichtbar)
+    // - Optional: Mindestbewegung in Pixeln (sub-1px steps zusammenfassen)
+    const antiCfg = is2D ? getAntiSwimConfig(zoom, true) : null;
+    if (is2D && antiCfg && antiCfg.dda) {
+        animPoints = quantizeLngLatPathToWorldPixelDDA(processedPoints, zoom);
+    }
+
+    const totalFrames = animPoints.length;
+    if (!totalFrames) throw new Error("Keine Frames zum Rendern.");
+
+    // Progress overlay (Part 4)
+    try { progressUI.begin(totalFrames, fps); } catch (e) {}
+
+
+    const frameToIdx = (antiCfg && antiCfg.minPx > 0)
+        ? buildFrameToPointIndex(animPoints, zoom, antiCfg.minPx)
+        : null;
+
+    const startIdx = 0;
+    const startPraw = is2D ? animPoints[startIdx] : processedPoints[startIdx];
+    const startCamRaw = is2D ? animPoints[startIdx] : (cameraPoints[startIdx] || processedPoints[startIdx]);
+
+    lastCity = "Start...";
+    lastRegion = "";
+
+    // Initial pose (before recording)
+    const initSnapped = (is2D && antiCfg && antiCfg.snap)
+        ? snapLngLatToWorldPixel(startCamRaw.lng, startCamRaw.lat, zoom)
+        : null;
+
+    const startCam = initSnapped ? { ...startCamRaw, ...initSnapped } : startCamRaw;
+    const startP = initSnapped ? { ...startPraw, ...initSnapped } : startPraw;
+
+    let bearingState = (startPraw.bearing || 0);
+    updateMarker(startP, is2D ? 0 : bearingState);
+    map.jumpTo({
+        center: [startCam.lng, startCam.lat],
+        zoom: zoom,
+        pitch: is2D ? 0 : 60,
+        bearing: is2D ? 0 : bearingState
+    });
+try { map.triggerRepaint(); } catch (e) {}
+    await waitForRender(1500);
+    await waitForTiles(1500);
+
+    // Prime reverse geocode once at start so we don't show placeholders at the beginning (very low cost: 1 request max).
+    try {
+        if (mapboxgl && mapboxgl.accessToken && (!resolvedGeo || !resolvedGeo.country)) {
+            geocodeState.t = 0; // allow immediate call
+            const g0 = await reverseGeocodeContext({ lng: startPraw.lng, lat: startPraw.lat });
+            if (g0) applyGeocodeContext(g0);
+        }
+    } catch (e) {}
+    try { updateGeoInfoAt({ lng: startPraw.lng, lat: startPraw.lat }); } catch (e) {}
+
+
+    // Decide recording mode: composite (SmartInfo inside video) vs direct capture fallback
+    let useComposite = true;
+    // create / resize record canvas (sync)
+    getOrCreateRecordCanvas();
+    useComposite = drawCompositeFrame({ includeSmartInfo: true });
+
+    if (!useComposite) {
+        // Don't abort: record map canvas directly; SmartInfo still visible on screen
+        try { document.getElementById('status').innerText = "Overlay nicht im Video (Browser blockiert Copy). Aufnahme läuft…"; } catch (e) {}
+    }
+
+    recordingState.active = true;
+    recordingState.composite = !!useComposite;
+
+
+    recordingState._overlayBoxW = 0;
+    const splitCfg = await prepareSplitOutput(prefix);
+    try { if (splitCfg && splitCfg.enabled) showSplitStatus("Split aktiv – warte auf Teil 01…"); else hideSplitStatus(); } catch (e) {}
+    const rec = createRec(prefix, useComposite ? recordCanvas : null, splitCfg.enabled ? { splitMs: splitCfg.ms } : {});
+    __rec = rec;
+
+    // Start recording
+    await (async () => {
+        const started = new Promise(r => rec.addEventListener('start', r, { once: true }));
+        (rec._start ? rec._start() : rec.start());
+        await Promise.race([started, sleep(600)]);
+    })();
+
+    const t0 = performance.now();
+    let lastAppliedIdx = -1;
+    let lastGeo = { lng: startPraw.lng, lat: startPraw.lat };
+
+    for (let i = 0; i < totalFrames; i++) {
+        const idx = frameToIdx ? frameToIdx[i] : i;
+
+        const pRaw = is2D ? animPoints[idx] : processedPoints[idx];
+        const cRaw = is2D ? animPoints[idx] : (cameraPoints[idx] || processedPoints[idx]);
+
+        // Nur updaten, wenn sich der "sichtbare" Punkt ändert
+        if (idx !== lastAppliedIdx) {
+            let pUse = pRaw;
+            let cUse = cRaw;
+
+            if (is2D && antiCfg && antiCfg.snap && !antiCfg.dda) {
+                const sn = snapLngLatToWorldPixel(cRaw.lng, cRaw.lat, zoom);
+                cUse = { ...cRaw, ...sn };
+                // Marker soll bei 2D exakt im Center bleiben -> gleiche Snapping-Koordinaten
+                pUse = { ...pRaw, ...sn };
+            }
+
+            let bearingUse = (pRaw.bearing || 0);
+            if (!is2D) {
+                const targetB = (pRaw.bearing || 0);
+                // Smooth camera yaw so turns start slightly earlier and end slightly later (no hard swivels).
+                bearingState = lerpBearingDeg(bearingState, targetB, 0.22);
+                bearingUse = bearingState;
+            }
+            updateMarker(pUse, bearingUse);
+            map.jumpTo({
+                center: [cUse.lng, cUse.lat],
+                zoom: zoom,
+                pitch: is2D ? 0 : 60,
+                bearing: is2D ? 0 : bearingUse
+            });
+try { map.triggerRepaint(); } catch (e) {}
+            await waitForRender(350);
+
+            lastAppliedIdx = idx;
+            lastGeo = { lng: pRaw.lng, lat: pRaw.lat };
+        }
+
+        // Smart info: roughly once per second (throttled internally)
+        if (i % fps === 0) {
+            try { updateGeoInfoAt(lastGeo); } catch (e) {}
+        }
+
+        
+        // HUD meta (ca. 2×/Sek): Uhrzeit / Fahrzeit / km
+        if (i % 15 === 0) {
+            try {
+                lastMetaLine = buildMetaLine(pRaw, i, totalFrames);
+                const metaEl = document.getElementById('locMeta');
+                if (metaEl) metaEl.innerText = lastMetaLine;
+            } catch (e) {}
+        }
+
+        if (useComposite) {
+            const ok = drawCompositeFrame({ includeSmartInfo: true });
+            if (!ok) {
+                useComposite = false;
+                try { document.getElementById('status').innerText = "Overlay deaktiviert (Copy blockiert). Aufnahme läuft weiter…"; } catch (e) {}
+            }
+        }
+
+        if (i % 30 === 0) {
+            if (!recordingState.active) { try { document.getElementById('status').innerText = `Rec: ${i}/${totalFrames}`; } catch (e) {} }
+        }
+
+        // Progress UI (throttled)
+        try { progressUI.update(i, totalFrames, fps); } catch (e) {}
+
+
+        // Stable cadence (reduces micro jitter)
+        const target = t0 + (i + 1) * frameMs;
+        const now = performance.now();
+        const sleepMs = target - now;
+        if (sleepMs > 0) await sleep(sleepMs);
+    }
+
+    // Recording done — finalize file writing
+    try { progressUI.message('Finalisiere…'); } catch (e) {}
+
+
+    // Stop recorder
+    await (async () => {
+        const stopped = new Promise(r => rec.addEventListener('stop', r, { once: true }));
+        try { (rec._stop ? rec._stop() : rec.stop()); } catch (e) {}
+        await Promise.race([stopped, sleep(1500)]);
+    })();
+
+    toggleUI(true);
+    try { document.getElementById('status').innerText = "Fertig."; } catch (e) {}
+
+    } finally {
+        // Immer aufräumen (auch bei Fehlern)
+        try {
+            if (__rec && __rec.state && __rec.state !== 'inactive') {
+                try { (__rec._stop ? __rec._stop() : __rec.stop()); } catch (e) {}
+            }
+        } catch (e) {}
+        try { recordingState.active = false; recordingState.composite = false; recordingState._overlayBoxW = 0; } catch (e) {}
+        try { cleanupRecordCanvas(); } catch (e) {}
+        try { progressUI.end(); } catch (e) {}
+    }
+}
+
+function updateMarker(p, bearingOverride = null) {
+        lastMarkerPoint = p;
+        if (!map || !map.getSource('marker')) return;
+        map.getSource('marker').setData({
+            type: 'FeatureCollection',
+            features: [{
+                type: 'Feature',
+                geometry: { type: 'Point', coordinates: [p.lng, p.lat] },
+                properties: { bearing: (bearingOverride != null ? bearingOverride : (p.bearing || 0)) }
+            }]
+        });
+    }
+    function pickMimeType() {
+        const candidates = [
+            'video/webm;codecs=vp9',
+            'video/webm;codecs=vp8',
+            'video/webm'
+        ];
+        for (const m of candidates) {
+            try {
+                if (window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(m)) return m;
+            } catch (e) {}
+        }
+        return '';
+    }
+
+    function createRec(prefix, captureCanvas = null, options = {}) {
+        const canvas = captureCanvas || map.getCanvas();
+        const stream = canvas.captureStream(30);
+
+        const mime = pickMimeType();
+        const opts = { videoBitsPerSecond: 25000000 };
+        if (mime) opts.mimeType = mime;
+
+        const r = new MediaRecorder(stream, opts);
+
+        // IMPORTANT:
+        // We do NOT use MediaRecorder timeslice-chunks for splitting, because Chrome often writes
+        // a full WebM header only in the first chunk, making part 02+ look "corrupt".
+        // Instead we split by STOP+START to guarantee each part is an independent WebM file.
+        const splitMs = Math.max(0, Number(options && options.splitMs ? options.splitMs : 0));
+        let part = 1;
+
+        let chunks = [];
+        let splitTimer = null;
+        let splitFinal = false;
+
+        const pad2 = (n) => String(n).padStart(2, '0');
+
+        const downloadBlob = (blob, filename) => {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            a.click();
+            setTimeout(() => URL.revokeObjectURL(url), 5000);
+        };
+
+        const savePart = async (blob, filename, currentPart) => {
+            try { showSplitStatus(`Split: speichere Teil ${pad2(currentPart)} …`); } catch (e) {}
+
+            if (splitFolderHandle) {
+                // Write-to-folder mode (Chromium). Queue writes to keep order and reduce IO spikes.
+                splitWriteQueue = splitWriteQueue.then(async () => {
+                    const fh = await splitFolderHandle.getFileHandle(filename, { create: true });
+                    const w = await fh.createWritable();
+                    await w.write(blob);
+                    await w.close();
+                    try { showSplitStatus(`Split: gespeichert Teil ${pad2(currentPart)} (${filename})`); } catch (e) {}
+                }).catch(() => {});
+            } else {
+                downloadBlob(blob, filename);
+                try { showSplitStatus(`Split: Download Teil ${pad2(currentPart)} (${filename})`); } catch (e) {}
+            }
+        };
+
+        const scheduleSplitStop = () => {
+            if (!splitMs || splitFinal) return;
+            if (splitTimer) clearTimeout(splitTimer);
+            splitTimer = setTimeout(() => {
+                // Only stop if we are currently recording; if we are already stopping/idle, ignore.
+                try {
+                    if (!splitFinal && r.state === 'recording') r.stop();
+                } catch (e) {}
+            }, splitMs);
+        };
+
+        // Collect data for the current part
+        r.ondataavailable = (e) => {
+            if (!e.data || e.data.size <= 0) return;
+            chunks.push(e.data);
+        };
+
+        r.onstop = () => {
+            // Snapshot data for THIS part
+            const currentPart = part++;
+            const blob = new Blob(chunks, { type: mime || 'video/webm' });
+            chunks = [];
+
+            const filename = (splitMs > 0)
+                ? `${prefix}_Fahrt_part${pad2(currentPart)}.webm`
+                : `${prefix}_Fahrt.webm`;
+
+            // For split mode: start next part ASAP (minimize gaps), then save async
+            if (splitMs > 0 && !splitFinal) {
+                try {
+                    r.start();
+                } catch (e) {
+                    // If start fails for any reason, we still save the part we have.
+                }
+                scheduleSplitStop();
+            }
+
+            // Save / download (async queue for folder mode)
+            if (splitMs > 0) {
+                savePart(blob, filename, currentPart);
+            } else {
+                downloadBlob(blob, filename);
+            }
+
+            // Finalization after the last part
+            if (splitMs > 0 && splitFinal) {
+                // When folder mode is used, wait for queue completion (best effort) and update UI.
+                (async () => {
+                    try { await splitWriteQueue; } catch (e) {}
+                    try {
+                        showSplitStatus("Split: fertig.");
+                        setTimeout(() => hideSplitStatus(), 4000);
+                        if (splitFolderHandle) {
+                            document.getElementById('status').innerText = "Aufnahme fertig: Teile im gewählten Ordner gespeichert.";
+                        }
+                    } catch (e) {}
+                })();
+            }
+        };
+
+        // Start helper (keeps current calling code unchanged)
+        r._start = () => {
+            splitFinal = false;
+            try {
+                r.start();
+            } catch (e) {
+                try { r.start(); } catch (_) {}
+            }
+            if (splitMs > 0) {
+                scheduleSplitStop();
+            }
+        };
+
+        // Stop helper for split mode (ensures we don't immediately restart another segment)
+        r._stop = () => {
+            splitFinal = true;
+            if (splitTimer) {
+                try { clearTimeout(splitTimer); } catch (e) {}
+                splitTimer = null;
+            }
+            try {
+                if (r.state === 'recording') r.stop();
+                // If already inactive (e.g., between parts), nothing to do; onstop will finish current save.
+            } catch (e) {}
+        };
+
+        return r;
+    }
+
+    function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+    async function fetchWithRetry(url, options = {}, maxRetries = 3) {
+        let lastError;
+        for (let i = 0; i < maxRetries; i++) {
+            try {
+                const response = await fetch(url, options);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                return await response.json();
+            } catch (error) {
+                lastError = error;
+                if (i < maxRetries - 1) {
+                    await sleep(1000 * Math.pow(2, i));
+                }
+            }
+        }
+        throw lastError;
+    }
+
+
+    function installFastWheelZoom() {
+        if (!map) return;
+        // Disable Mapbox's default wheel handler so our custom speed is actually applied.
+        try { map.scrollZoom.disable(); } catch(e) {}
+        const canvas = map.getCanvas();
+        if (!canvas) return;
+
+        // Tunables:
+        // - mouse wheel: per notch zoom step (bigger = faster)
+        // - trackpad: delta->zoom factor (bigger = faster)
+        const WHEEL_STEP = 0.75;      // ~0.75 zoom levels per notch
+        const TRACKPAD_FACTOR = 0.0025; // deltaY * factor -> zoom delta
+
+        canvas.addEventListener('wheel', (e) => {
+            // Prevent page scroll + let us control zoom.
+            e.preventDefault();
+
+            const rect = canvas.getBoundingClientRect();
+            const px = [e.clientX - rect.left, e.clientY - rect.top];
+            const around = map.unproject(px);
+
+            const abs = Math.abs(e.deltaY);
+            const isTrackpad = (e.deltaMode === 0 && abs < 50);
+
+            const cur = map.getZoom();
+            let next = cur;
+
+            if (isTrackpad) {
+                // Smooth / continuous scrolling (trackpad)
+                next = cur - (e.deltaY * TRACKPAD_FACTOR);
+                map.easeTo({ zoom: clamp(next, map.getMinZoom(), map.getMaxZoom()), around, duration: 0 });
+            } else {
+                // Discrete wheel notch
+                next = cur + (e.deltaY < 0 ? WHEEL_STEP : -WHEEL_STEP);
+                map.easeTo({ zoom: clamp(next, map.getMinZoom(), map.getMaxZoom()), around, duration: 120 });
+            }
+        }, { passive: false });
+    }
+
+function pad2(n){ return String(n).padStart(2,'0'); }
+    function formatClock(ms){
+        const d = new Date(ms);
+        return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+    }
+    function formatDrive(ms){
+        ms = Math.max(0, ms|0);
+        const s = Math.floor(ms/1000);
+        const h = Math.floor(s/3600);
+        const m = Math.floor((s%3600)/60);
+        const sec = s%60;
+        // Kompakt aber lesbar: H:MM oder MM:SS
+        if(h>0) return `${h}:${pad2(m)}`;
+        return `${m}:${pad2(sec)}`;
+    }
+    function formatKm(km){
+        if(!isFinite(km)) return '';
+        if(km >= 100) return `${Math.round(km)} km`;
+        if(km >= 10) return `${km.toFixed(1)} km`;
+        return `${km.toFixed(2)} km`;
+    }
+    function buildMetaLine(p, frameIndex = null, totalFrames = null){
+        const showClock = !!document.getElementById('showClock')?.checked;
+        const showDrive = !!document.getElementById('showDriveTime')?.checked;
+        const showKm = !!document.getElementById('showDistance')?.checked;
+
+        // Prefer per-point meta if present (km/elapsedMs/tMs), but fall back to timeline + frame progress.
+        let km = (p && p.km != null) ? p.km : null;
+        let elapsedMs = (p && p.elapsedMs != null) ? p.elapsedMs : null;
+        let tMs = (p && p.tMs != null) ? p.tMs : null;
+
+        if ((km == null || elapsedMs == null || tMs == null) && metaTimeline && totalFrames && totalFrames > 1 && frameIndex != null) {
+            const prog = Math.min(1, Math.max(0, frameIndex / (totalFrames - 1)));
+            if (km == null && metaTimeline.totalKm != null) km = prog * metaTimeline.totalKm;
+            if (elapsedMs == null && metaTimeline.driveTotalMs != null) elapsedMs = Math.round(prog * metaTimeline.driveTotalMs);
+            if (tMs == null && metaTimeline.clockStartMs != null && elapsedMs != null) tMs = metaTimeline.clockStartMs + elapsedMs;
+        }
+
+        const parts = [];
+        if(showClock && tMs != null) parts.push(formatClock(tMs));
+        if(showDrive && elapsedMs != null) parts.push(formatDrive(elapsedMs));
+        if(showKm && km != null) parts.push(formatKm(km));
+        return parts.join('  •  ');
+    }
+
+
+// --- Render stability helpers (reduce far-zoom micro-jitter) ---
+function beginRenderStability(renderType, zoom) {
+    if (!map) return null;
+    const st = {};
+    try { st._fadeDuration = map._fadeDuration; map._fadeDuration = 0; } catch (e) {}
+    try { st.projection = (map.getProjection && map.getProjection()) || null; } catch (e) {}
+    try { st.terrain = (map.getTerrain && map.getTerrain()) || null; } catch (e) {}
+
+    if (renderType === '2d') {
+        // For wide 2D shots, disable terrain to reduce per-frame reprojection load.
+        // Terrain + DEM can cause subtle relative motion perception at low zoom and can drop frames.
+        try { if (map.setProjection) map.setProjection('mercator'); } catch (e) {}
+        try { if (map.setTerrain) map.setTerrain(null); } catch (e) {}
+    } else {
+        // 3D uses globe + terrain for the cinematic look
+        try { if (map.setProjection) map.setProjection('globe'); } catch (e) {}
+        try {
+            if (map.getSource && map.getSource('dem') && map.setTerrain) {
+                map.setTerrain({ source: 'dem', exaggeration: 1.5 });
+            }
+        } catch (e) {}
+    }
+    return st;
+}
+
+function restoreRenderStability(st) {
+    if (!map || !st) return;
+    try { if (typeof st._fadeDuration === 'number') map._fadeDuration = st._fadeDuration; } catch (e) {}
+
+    try {
+        if (st.projection && map.setProjection) {
+            const name = (typeof st.projection === 'string')
+                ? st.projection
+                : (st.projection.name || st.projection.type || st.projection.id || st.projection);
+            map.setProjection(name);
+        }
+    } catch (e) {}
+
+    try { if (map.setTerrain) map.setTerrain(st.terrain || null); } catch (e) {}
+}
+    async function changeGlobalStyle() {
+        if (!map) return;
+        const s = document.getElementById('mapStyle').value;
+        document.getElementById('status').innerText = "Stil laden...";
+        await setMapStyleSafely(s);
+        if (activeMain === 'route') updateFilePreview();
+        if (activeMain === 'heat') updateHeatmapData();
+    }
+    
+    function buildNotesFC() {
+        return {
+            type: 'FeatureCollection',
+            features: (notes || []).map(n => ({
+                type: 'Feature',
+                geometry: { type: 'Point', coordinates: [n.lng, n.lat] },
+                properties: { label: n.label || '' }
+            }))
+        };
+    }
+
+    function updateNotesSource() {
+        if (!map) return;
+        try {
+            const src = map.getSource('notes');
+            if (src) src.setData(buildNotesFC());
+        } catch (e) {}
+    }
+
+    function updateNoteModeUI() {
+        const btn = document.getElementById('btnNoteMode');
+        const st = document.getElementById('noteStatus');
+        if (btn) btn.className = noteAddMode ? 'btn-green' : 'btn-def';
+        if (st) st.innerText = noteAddMode ? "Marker: an (klicke in die Karte)" : "Marker: aus";
+    }
+
+    function toggleNoteAddMode() {
+        noteAddMode = !noteAddMode;
+        updateNoteModeUI();
+        document.getElementById('status').innerText = noteAddMode ? "Marker-Modus: Klick = Marker setzen" : "Bereit";
+    }
+
+    function addNoteAt(lngLat) {
+        const label = prompt("Marker-Text:", "Spot") || "";
+        if (!label.trim()) return;
+        notes.push({ lng: lngLat.lng, lat: lngLat.lat, label: label.trim() });
+        updateNotesSource();
+        updateNoteModeUI();
+    }
+
+    function clearNotes() {
+        notes = [];
+        updateNotesSource();
+        noteAddMode = false;
+        updateNoteModeUI();
+    }
+
+    
+    function enhanceLabelReadability() {
+        if (!map || !map.getStyle) return;
+
+        const styleHint = (currentStyleURL || '').toLowerCase();
+        const isSatellite = styleHint.includes('satellite'); // includes satellite-streets
+        const isDark = styleHint.includes('dark') || isSatellite;
+
+        // "streets" is light-ish for normal styles, but satellite-streets must stay white
+        const isLight = !isSatellite && (styleHint.includes('light') || styleHint.includes('streets') || styleHint.includes('outdoors'));
+
+        // Halos: black works best on satellite & dark; white halo helps on light styles
+        const halo = isDark ? 'rgba(0,0,0,0.88)' : 'rgba(255,255,255,0.88)';
+        const haloWidth = isSatellite ? 1.6 : (isLight ? 1.9 : 1.3);
+        const haloBlur = 0.75;
+
+        // Text color overrides:
+        // - Light styles: darker labels for readability
+        // - Satellite (and especially satellite-streets): force white labels (black would be unreadable)
+        const forceTextColor = isSatellite ? '#ffffff' : (isLight ? '#1a1a1a' : null);
+        const forceTextOpacity = forceTextColor ? 1 : null;
+
+        const layers = (map.getStyle().layers || []);
+        for (const l of layers) {
+            if (!l || l.type !== 'symbol') continue;
+            const id = (l.id || '').toLowerCase();
+
+            // Focus on place/admin labels; avoid touching every road label too aggressively
+            if (!/(place|settlement|locality|country|state|admin|district|county|label)/.test(id)) continue;
+
+            // Must be a text layer
+            try {
+                const tf = map.getLayoutProperty(l.id, 'text-field');
+                if (!tf) continue;
+            } catch (e) { continue; }
+
+            try { map.setPaintProperty(l.id, 'text-halo-color', halo); } catch (e) {}
+            try { map.setPaintProperty(l.id, 'text-halo-width', haloWidth); } catch (e) {}
+            try { map.setPaintProperty(l.id, 'text-halo-blur', haloBlur); } catch (e) {}
+
+            if (forceTextColor) {
+                try { map.setPaintProperty(l.id, 'text-color', forceTextColor); } catch (e) {}
+                try { map.setPaintProperty(l.id, 'text-opacity', forceTextOpacity); } catch (e) {}
+            }
+        }
+    }
+
+
+    function triggerDummyDownload() { const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob(["OK"],{type:"text/plain"})); a.download="check.txt"; a.click(); }
+    
+    document.getElementById('fileInput').addEventListener('change', (e) => {
+        if(activeSub !== 'file') setSub('file');
+        const file = e.target.files[0]; if(!file) return;
+        const r = new FileReader(); document.getElementById('status').innerText = "Lese...";
+        r.onload = (ev) => {
+            try {
+                const json = JSON.parse(ev.target.result);
+                if(json.semanticSegments) {
+                    fileData = json.semanticSegments;
+                    
+                    buildSegmentIndexFromFile();
+let min=Infinity, max=-Infinity;
+                    fileData.forEach(s=>{ if(s.startTime) { const t=new Date(s.startTime).getTime(); if(t<min) min=t; } if(s.endTime) { const t=new Date(s.endTime).getTime(); if(t>max) max=t; } });
+                    if(min!==Infinity) {
+                        const s=new Date(min); s.setMinutes(s.getMinutes()-s.getTimezoneOffset());
+                        document.getElementById('startTime').value=s.toISOString().slice(0,16);
+                        const e=new Date(max); e.setMinutes(e.getMinutes()-e.getTimezoneOffset());
+                        document.getElementById('endTime').value=e.toISOString().slice(0,16);
+                    }
+                    document.getElementById('status').innerText = "Geladen.";
+                    initLayers().then(() => { updateFilePreview(); openTimeHelper(true); });
+                }
+            } catch(x) { alert("JSON Fehler"); }
+        };
+        r.readAsText(file);
+    });
+
+    function updateFilePreview() {
+        if(!fileData || !map || !map.getSource('route')) return;
+        const points = extractPts();
+        if(points.length > 1) {
+            const geoJson = { type: 'Feature', geometry: { type: 'LineString', coordinates: points.map(p => [p.lng, p.lat]) } };
+            map.getSource('route').setData(geoJson);
+            const bounds = new mapboxgl.LngLatBounds(); points.forEach(p => bounds.extend([p.lng, p.lat])); map.fitBounds(bounds, {padding: 50});
+            processedPoints = [];
+        } else map.getSource('route').setData({type:'Feature', geometry:{type:'LineString', coordinates:[]}});
+        if(activeMain === 'heat') updateHeatmapData();
+
+        // Update time-helper content live (if open)
+        try {
+            const modal = document.getElementById('timeHelperModal');
+            if (modal && modal.style.display === 'block') refreshTimeHelper();
+        } catch (e) {}
+
+    }
+
+    function extractPts() {
+        if(!document.getElementById('startTime').value) return [];
+        const start = new Date(document.getElementById('startTime').value).getTime();
+        const end = new Date(document.getElementById('endTime').value).getTime();
+        let pts = [];
+        fileData.forEach(s => { if(s.timelinePath) s.timelinePath.forEach(tp => { const t = new Date(tp.time).getTime(); if(t>=start && t<=end) { const c = parseGeoString(tp.point); if(c) pts.push({lng:c[0], lat:c[1]}); } }); });
+        return pts;
+    }
+
+    function parseGeoString(s) { if(!s) return null; const c=s.replace(/°/g,'').split(','); return c.length===2?[parseFloat(c[1]), parseFloat(c[0])]:null; }
+
+    // ---------------- Time Helper (Google semanticSegments texts) ----------------
+    function buildSegmentIndexFromFile() {
+        segmentIndex = [];
+        if (!fileData || !Array.isArray(fileData)) return;
+
+        for (const seg of fileData) {
+            const { s, e } = getSegmentStartEndMs(seg);
+            if (!Number.isFinite(s) || !Number.isFinite(e)) continue;
+
+            const text = describeSegment(seg);
+            const kind = (seg && seg.visit) ? 'visit' : ((seg && seg.activity) ? 'activity' : 'segment');
+            segmentIndex.push({ s, e, text, kind });
+        }
+
+        segmentIndex.sort((a, b) => a.s - b.s);
+    }
+
+    function getSegmentStartEndMs(seg) {
+        let s = seg && seg.startTime ? Date.parse(seg.startTime) : NaN;
+        let e = seg && seg.endTime ? Date.parse(seg.endTime) : NaN;
+
+        if ((!Number.isFinite(s) || !Number.isFinite(e)) && seg && Array.isArray(seg.timelinePath) && seg.timelinePath.length) {
+            const t0 = seg.timelinePath[0] && seg.timelinePath[0].time ? seg.timelinePath[0].time : null;
+            const t1 = seg.timelinePath[seg.timelinePath.length - 1] && seg.timelinePath[seg.timelinePath.length - 1].time ? seg.timelinePath[seg.timelinePath.length - 1].time : null;
+            if (!Number.isFinite(s) && t0) s = Date.parse(t0);
+            if (!Number.isFinite(e) && t1) e = Date.parse(t1);
+        }
+
+        // guard: sometimes segments have equal timestamps; keep them but ensure minimal span
+        if (Number.isFinite(s) && Number.isFinite(e) && e < s) {
+            const tmp = s; s = e; e = tmp;
+        }
+        return { s, e };
+    }
+
+    function pickString(obj, paths, fallback = '') {
+        for (const path of paths) {
+            let v = obj;
+            for (const k of path) {
+                if (v && typeof v === 'object' && k in v) v = v[k];
+                else { v = null; break; }
+            }
+            if (typeof v === 'string' && v.trim()) return v.trim();
+        }
+        return fallback;
+    }
+
+    function describeSegment(seg) {
+        // Visit / Aufenthalt (Google "visit")
+        if (seg && seg.visit) {
+            const cand = seg.visit.topCandidate || seg.visit;
+            const name = pickString(cand, [
+                ['placeName'],
+                ['place', 'name'],
+                ['location', 'name'],
+                ['name']
+            ], '');
+
+            const addr = pickString(cand, [
+                ['placeAddress'],
+                ['place', 'address'],
+                ['address'],
+                ['formattedAddress']
+            ], '');
+
+            const type = pickString(cand, [
+                ['semanticType'],
+                ['placeCategory'],
+                ['type']
+            ], '');
+
+            let label = 'Aufenthalt';
+            if (name) label += `: ${name}`;
+            else if (type) label += `: ${type}`;
+            if (addr && addr !== name) label += ` (${addr})`;
+            return label;
+        }
+
+        // Activity / Bewegung (Google "activity")
+        if (seg && seg.activity) {
+            const cand = seg.activity.topCandidate || seg.activity;
+            const type = pickString(cand, [
+                ['type'],
+                ['activityType'],
+                ['semanticType']
+            ], '');
+            return type ? `Bewegung: ${type}` : 'Bewegung';
+        }
+
+        // Fallback: detect moving segments with timelinePath
+        if (seg && Array.isArray(seg.timelinePath) && seg.timelinePath.length) return 'Segment: Strecke';
+        return 'Segment';
+    }
+
+    function fmtTime(ms) {
+        try { return new Date(ms).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }); } catch (e) { return ''; }
+    }
+    function fmtDateTime(ms) {
+        try { return new Date(ms).toLocaleString('de-DE', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }); } catch (e) { return ''; }
+    }
+    function escapeHtml(s) {
+        return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[c]));
+    }
+
+    function getInputMs(id) {
+        const el = document.getElementById(id);
+        if (!el || !el.value) return NaN;
+        const d = new Date(el.value);
+        const ms = d.getTime();
+        return Number.isFinite(ms) ? ms : NaN;
+    }
+
+    function contextSegments(ms) {
+        if (!segmentIndex || segmentIndex.length === 0 || !Number.isFinite(ms)) return [];
+
+        // containing segment
+        let idx = segmentIndex.findIndex(it => ms >= it.s && ms <= it.e);
+
+        // nearest segment if none contains
+        if (idx < 0) {
+            let best = 0, bestDist = Infinity;
+            for (let i = 0; i < segmentIndex.length; i++) {
+                const it = segmentIndex[i];
+                const mid = (it.s + it.e) / 2;
+                const d = Math.abs(ms - mid);
+                if (d < bestDist) { bestDist = d; best = i; }
+            }
+            idx = best;
+        }
+
+        const start = Math.max(0, idx - 3);
+        const end = Math.min(segmentIndex.length - 1, idx + 3);
+        const out = [];
+        for (let i = start; i <= end; i++) out.push({ it: segmentIndex[i], active: i === idx });
+        return out;
+    }
+
+    function renderContextList(listId, selectedId, ms) {
+        const sel = document.getElementById(selectedId);
+        if (sel) sel.textContent = Number.isFinite(ms) ? fmtDateTime(ms) : '–';
+
+        const box = document.getElementById(listId);
+        if (!box) return;
+
+        const items = contextSegments(ms);
+        if (!items.length) {
+            box.innerHTML = '<div class="th-item"><div class="th-text">Keine Segmenttexte gefunden.</div></div>';
+            return;
+        }
+
+        box.innerHTML = items.map(({ it, active }) => {
+            const t = `${fmtTime(it.s)}–${fmtTime(it.e)}`;
+            const txt = escapeHtml(it.text || 'Segment');
+            return `<div class="th-item${active ? ' active' : ''}"><div class="th-time">${t}</div><div class="th-text">${txt}</div></div>`;
+        }).join('');
+    }
+
+    function refreshTimeHelper() {
+        renderContextList('thStartList', 'thStartSelected', getInputMs('startTime'));
+        renderContextList('thEndList', 'thEndSelected', getInputMs('endTime'));
+    }
+
+    function openTimeHelper(auto = false) {
+        const modal = document.getElementById('timeHelperModal');
+        if (!modal) return;
+        buildSegmentIndexFromFile();
+        refreshTimeHelper();
+        modal.style.display = 'block';
+
+        if (auto) {
+            if (timeHelperAutoTimer) clearTimeout(timeHelperAutoTimer);
+            timeHelperAutoTimer = setTimeout(() => closeTimeHelper(), 12000);
+        }
+    }
+
+    function closeTimeHelper() {
+        const modal = document.getElementById('timeHelperModal');
+        if (modal) modal.style.display = 'none';
+        if (timeHelperAutoTimer) { clearTimeout(timeHelperAutoTimer); timeHelperAutoTimer = null; }
+    }
+    // ---------------------------------------------------------------------------
+
+    function loadImage(url) { return new Promise((r, j) => { map.loadImage(url, (e, i) => { if(e) j(e); else r(i); }); }); }
+    function addWaypoint(lngLat) {
+        const el = document.createElement('div');
+        el.className = 'waypoint-marker';
+        const m = new mapboxgl.Marker(el).setLngLat(lngLat).addTo(map);
+        routeMarkers.push(m);
+        routeWaypoints.push(lngLat);
+        routeCoords.push([lngLat.lng, lngLat.lat]);
+
+        // Simple preview line between waypoints
+        try {
+            if (map.getSource('route') && routeCoords.length > 1) {
+                map.getSource('route').setData({ type: 'Feature', geometry: { type: 'LineString', coordinates: routeCoords } });
+            }
+        } catch (e) {}
+    }
+
+    function addPt(lngLat) {
+        // Alias used by older versions / click handler
+        addWaypoint(lngLat);
+    }
+    function clearRoute() {
+        try { routeMarkers.forEach(m => m.remove()); } catch (e) {}
+        routeMarkers = [];
+        routeWaypoints = [];
+        routeCoords = [];
+        routeGeometry = null;
+        processedPoints = [];
+
+
+        // Reset route meta (duration/distance)
+        if (typeof routeMeta !== "undefined" && routeMeta) { routeMeta.durationSec = null; routeMeta.distanceKm = null; }
+        if (map && map.getSource('route')) {
+            map.getSource('route').setData({ type: 'Feature', geometry: { type: 'LineString', coordinates: [] } });
+        }
+        document.getElementById('status').innerText = "Route gelöscht.";
+    }
+
+// --- Route Plan Helpers ----------------------------------------------------
+// Normalize lng/lat to avoid "world wrap" issues (e.g. Globe projection).
+function normalizeLngLatPair(lng, lat) {
+    const L = ((lng + 540) % 360) - 180; // -> [-180..180]
+    const A = Math.max(-89.999999, Math.min(89.999999, lat));
+    return [L, A];
+}
+function normalizeRouteCoords(coords) {
+    return coords.map(([lng, lat]) => normalizeLngLatPair(lng, lat));
+}
+
+// Silent Directions fetch (no alerts). Returns { geometry, durationSec, distanceKm } or null.
+async function tryDirectionsGeometry(coordsNorm) {
+    if (!coordsNorm || coordsNorm.length < 2) return null;
+    if (!mapboxgl || !mapboxgl.accessToken) return null;
+
+    // Mapbox Directions: max 25 coords (incl start/end)
+    if (coordsNorm.length > 25) return null;
+
+    const coordString = coordsNorm
+        .map(([lng, lat]) => `${lng.toFixed(6)},${lat.toFixed(6)}`)
+        .join(';');
+
+    const profile = "driving";
+    const url =
+        `https://api.mapbox.com/directions/v5/mapbox/${profile}/${coordString}` +
+        `?alternatives=false&geometries=geojson&overview=full&steps=false&access_token=${encodeURIComponent(mapboxgl.accessToken)}`;
+
+    try {
+        const data = await fetchWithRetry(url, {}, 3);
+
+        // Mapbox sometimes returns {code:"NoRoute"/...} even on 200 OK
+        if (data && typeof data.code === 'string' && data.code !== 'Ok') return null;
+
+        const r0 = data?.routes?.[0];
+        const geom = r0?.geometry;
+        const coords = geom?.coordinates;
+        if (!geom || !Array.isArray(coords) || coords.length < 2) return null;
+
+        return {
+            geometry: geom,
+            durationSec: (typeof r0.duration === 'number') ? r0.duration : null,
+            distanceKm: (typeof r0.distance === 'number') ? (r0.distance / 1000) : null
+        };
+    } catch (e) {
+        // Silent: caller decides what to do
+        return null;
+    }
+}
+
+// Ensure that plan mode has a usable routeGeometry.
+// - Prefer Directions API once (silent), then fallback to a straight line if needed.
+async function ensurePlanRouteGeometry({ allowFallback = true } = {}) {
+    if (routeGeometry && routeGeometry.type && routeGeometry.coordinates && routeGeometry.coordinates.length >= 2) {
+        return true;
+    }
+    if (!routeCoords || routeCoords.length < 2) return false;
+
+    const coordsNorm = normalizeRouteCoords(routeCoords);
+
+    // Try Directions first (silent)
+    const res = await tryDirectionsGeometry(coordsNorm);
+    if (res && res.geometry) {
+        routeGeometry = res.geometry;
+        if (routeMeta) {
+            routeMeta.durationSec = res.durationSec;
+            routeMeta.distanceKm = res.distanceKm;
+        }
+        try {
+            if (map && map.getSource && map.getSource('route')) {
+                map.getSource('route').setData({ type: 'Feature', geometry: routeGeometry });
+            }
+        } catch (e) {}
+        return true;
+    }
+
+    if (!allowFallback) return false;
+
+    // Fallback: straight line
+    routeGeometry = { type: 'LineString', coordinates: coordsNorm };
+    try {
+        if (map && map.getSource && map.getSource('route')) {
+            map.getSource('route').setData({ type: 'Feature', geometry: routeGeometry });
+        }
+    } catch (e) {}
+
+    try { document.getElementById('status').innerText = "Hinweis: Directions nicht verfügbar → Luftlinie."; } catch (e) {}
+    return true;
+}
+// ---------------------------------------------------------------------------
+async function calculateRouteFromAPI() {
+    if (routeCoords.length < 2) return alert("Bitte mindestens Start und Ziel setzen.");
+    if (!mapboxgl || !mapboxgl.accessToken) return alert("Kein Mapbox-Token gesetzt.");
+
+    // Mapbox Directions: max 25 Koordinaten (inkl. Start/Ziel)
+    if (routeCoords.length > 25) {
+        alert("Zu viele Wegpunkte (max. 25). Bitte Route vereinfachen.");
+        return;
+    }
+
+    // Normalize coords (verhindert Weltkarten-Wrap-Probleme bei 'globe'/'world copies')
+    const coordsNorm = normalizeRouteCoords(routeCoords);
+
+
+    const coordString = coordsNorm
+        .map(([lng, lat]) => `${lng.toFixed(6)},${lat.toFixed(6)}`)
+        .join(';');
+
+    const profile = "driving";
+    const url =
+        `https://api.mapbox.com/directions/v5/mapbox/${profile}/${coordString}` +
+        `?alternatives=false&geometries=geojson&overview=full&steps=false&access_token=${encodeURIComponent(mapboxgl.accessToken)}`;
+
+    document.getElementById('status').innerText = "Berechne Route...";
+
+    try {
+        const data = await fetchWithRetry(url, {}, 3);
+
+        // Mapbox kann bei 200 OK auch {code:"NoRoute"/"NoSegment"/...} liefern
+        if (data && typeof data.code === 'string' && data.code !== 'Ok') {
+            console.warn('Directions API response:', data);
+            let msg = data.message || data.code;
+
+            if (data.code === 'NoRoute') msg = "Keine Route gefunden. Bitte Start/Ziel prüfen.";
+            if (data.code === 'NoSegment') msg = "Kein Straßensegment gefunden. Punkte evtl. im Wasser/abseits von Straßen.";
+            if (data.code === 'InvalidInput') msg = "Ungültige Eingabe. Bitte Route löschen und neu klicken.";
+
+            document.getElementById('status').innerText = "Keine Route.";
+            alert(msg);
+            return;
+        }
+
+        if (data && data.routes && data.routes.length && data.routes[0].geometry && data.routes[0].geometry.coordinates && data.routes[0].geometry.coordinates.length) {
+            routeGeometry = data.routes[0].geometry;
+
+            // Meta
+            if (routeMeta) {
+                routeMeta.durationSec = (typeof data.routes[0].duration === 'number') ? data.routes[0].duration : null;
+                routeMeta.distanceKm = (typeof data.routes[0].distance === 'number') ? (data.routes[0].distance / 1000) : null;
+            }
+
+            try {
+                if (map && map.getSource && map.getSource('route')) {
+                    map.getSource('route').setData({ type: 'Feature', geometry: routeGeometry });
+                }
+            } catch (e) {}
+
+            document.getElementById('status').innerText = "Route berechnet.";
+            setTimeout(calculateDataAsync, 50);
+            return;
+        }
+
+        console.warn('Directions unexpected response:', data);
+        document.getElementById('status').innerText = "Keine Route.";
+        alert("Keine Route gefunden. Bitte Start/Ziel prüfen.");
+    } catch (error) {
+        console.error('Route calculation failed:', error);
+
+        const msg = (error && error.message) ? String(error.message) : String(error);
+        if (msg.includes('HTTP 401')) {
+            alert("Token/Account hat keinen Zugriff auf die Directions API (HTTP 401). Bitte Token prüfen oder neuen Token erstellen.");
+        } else if (msg.includes('HTTP 403')) {
+            alert("Zugriff verweigert (HTTP 403). Token-Restriktionen (URL/Domain/Scopes) prüfen.");
+        } else if (msg.includes('HTTP 422')) {
+            alert("Ungültige Anfrage (HTTP 422). Bitte Route löschen und neu klicken.");
+        } else {
+            alert("Routenberechnung fehlgeschlagen. Bitte Internet/Token prüfen.");
+        }
+
+        document.getElementById('status').innerText = "Fehler bei Routenberechnung.";
+    }
+}
+
+
+    function resetCalculations() {
+        processedPoints = [];
+        if ((activeSub === 'file' && fileData) || (activeSub === 'plan' && routeGeometry)) calculateDataAsync();
+    }
+
+    async function calculateDataAsync() {
+        try {
+            const ok = await calcData();
+            if (ok) updateTimeEstimate();
+        } catch (e) {
+            console.warn('calcData failed', e);
+        }
+    }
+    function updateTimeEstimate() {
+        if(processedPoints.length===0) return;
+        const s = Math.floor(processedPoints.length/30);
+        document.getElementById('timeEstimate').innerText = `${Math.floor(s/60)}:${(s%60).toString().padStart(2,'0')}`;
+        document.getElementById('status').innerText = `Bereit (${processedPoints.length} F)`;
+    }
+
+    // --- OTHER MODES ---
+    function updateHeatmapData() {
+        if(!fileData) return;
+        const pts=extractPts(); 
+        if(pts.length>0) {
+            const feat = pts.map(p=>({type:'Feature',geometry:{type:'Point',coordinates:[p.lng,p.lat]}}));
+            map.getSource('heat').setData({type:'FeatureCollection',features:feat});
+            const b=new mapboxgl.LngLatBounds(); pts.forEach(p=>b.extend([p.lng,p.lat])); map.fitBounds(b,{padding:50});
+        }
+    }
+    function updateHeatmapStyle() { if(map.getLayer('heat-l')) { map.setPaintProperty('heat-l','heatmap-radius',parseInt(document.getElementById('heatRadius').value)); map.setPaintProperty('heat-l','heatmap-intensity',parseFloat(document.getElementById('heatIntensity').value)); } }
+    async function renderHeatmapVideo() {
+        toggleUI(false); await sleep(1000);
+        const rec=createRec('Heat'); rec.start(); rec.pause();
+        const type=document.getElementById('heatAnimType').value;
+        const c=map.getCenter(); const z=map.getZoom();
+        if(type==='static') for(let i=0;i<300;i++) { rec.resume(); await sleep(30); rec.pause(); }
+        else for(let i=0;i<=600;i++) { map.jumpTo({center:c,zoom:z,pitch:60,bearing:(i/600)*360}); await new Promise(r=>setTimeout(r,200)); rec.resume(); await sleep(30); rec.pause(); }
+        rec.stop(); toggleUI(true);
+    }
+    
+    function setKeyframe(t) { const c=map.getCenter(); const s={lng:c.lng,lat:c.lat,zoom:map.getZoom(),pitch:map.getPitch(),bearing:map.getBearing()}; if(t==='A') keyframeA=s; else keyframeB=s; alert(t+" OK"); }
+    const Easing = { linear: t=>t, easeInOutCubic: t=>t<.5?4*t*t*t:(t-1)*(2*t-2)*(2*t-2)+1 };
+    function interpolateState(s, e, t) { return { lng: s.lng + (e.lng-s.lng)*t, lat: s.lat + (e.lat-s.lat)*t, zoom: s.zoom + (e.zoom-s.zoom)*t, pitch: s.pitch + (e.pitch-s.pitch)*t, bearing: s.bearing + (e.bearing-s.bearing)*t }; }
+    async function renderCameraMove(isPreview = false) {
+        if(!keyframeA || !keyframeB) return alert("Start/Ziel?");
+        if(!isPreview) toggleUI(false); await sleep(1000);
+        const dur = parseFloat(document.getElementById('camDuration').value); const frames = dur * 30; const ease = Easing[document.getElementById('camEase').value];
+        let rec; if(!isPreview) { rec=createRec('Zoom'); rec.start(); rec.pause(); }
+        for(let i=0;i<=frames;i++) {
+            const s=interpolateState(keyframeA, keyframeB, ease(i/frames));
+            map.jumpTo({center:[s.lng,s.lat],zoom:s.zoom,pitch:s.pitch,bearing:s.bearing,duration:0});
+            if(!isPreview) { await new Promise(r=>setTimeout(r,200)); rec.resume(); await sleep(30); rec.pause(); }
+        }
+        if(rec) rec.stop(); if(!isPreview) toggleUI(true);
+    }
+    function previewCameraMove() { 
+        if(!keyframeA||!keyframeB) return; 
+        const dur=parseFloat(document.getElementById('camDuration').value)*1000;
+        map.flyTo({center:[keyframeA.lng,keyframeA.lat],zoom:keyframeA.zoom,pitch:keyframeA.pitch,bearing:keyframeA.bearing,duration:0});
+        setTimeout(()=>{ map.easeTo({center:[keyframeB.lng,keyframeB.lat],zoom:keyframeB.zoom,pitch:keyframeB.pitch,bearing:keyframeB.bearing,duration:dur}); }, 1000);
+    }
+
+    /* MULTI-KEYFRAME CAMERA V2 */
+    let camKeyframes = []; // array of {lng,lat,zoom,pitch,bearing}
+    const CAM_MAX_KF = 10;
+    let camEndFirst = false;
+    let camPendingEnd = null; // stores 'Ziel' if user sets it before 'Start'
+
+
+    function getCamStateNow(){
+        const c = map.getCenter();
+        return { lng:c.lng, lat:c.lat, zoom:map.getZoom(), pitch:map.getPitch(), bearing:map.getBearing() };
+    }
+    function syncLegacyKeyframes(){
+        keyframeA = camKeyframes.length ? camKeyframes[0] : null;
+        keyframeB = camKeyframes.length >= 2 ? camKeyframes[camKeyframes.length-1] : null;
+    }
+    function clearCamKeyframes(){
+        camKeyframes = [];
+        camEndFirst = false;
+        camPendingEnd = null;
+        syncLegacyKeyframes();
+        renderCamKeyframeList();
+    }
+    function addMidKeyframe(){
+        if(!map) return;
+        const s = getCamStateNow();
+        if(camKeyframes.length >= CAM_MAX_KF) { alert("Max. " + CAM_MAX_KF + " Keyframes."); return; }
+        if(camKeyframes.length >= 2){
+            camKeyframes.splice(camKeyframes.length-1, 0, s); // insert before last
+        } else {
+            camKeyframes.push(s);
+        }
+        syncLegacyKeyframes();
+        renderCamKeyframeList();
+    }
+    // Override: Start / Ziel
+    function setKeyframe(t){
+        if(!map) return;
+        const s = getCamStateNow();
+
+        if(t === 'B' && camKeyframes.length === 0){
+            // User set "Ziel" first: remember it, don't lose it when "Start" is set later
+            camKeyframes = [s];
+            camEndFirst = true;
+            camPendingEnd = s;
+        } else if(t === 'A'){
+            if(camKeyframes.length === 0){
+                camKeyframes = [s];
+            } else {
+                camKeyframes[0] = s;
+                // If "Ziel" was set first, restore it as last keyframe now
+                if(camEndFirst && camPendingEnd && camKeyframes.length === 1){
+                    camKeyframes.push(camPendingEnd);
+                    camEndFirst = false;
+                    camPendingEnd = null;
+                }
+            }
+        } else { // t === 'B'
+            if(camKeyframes.length === 1){
+                if(camEndFirst){
+                    // still only has the early "Ziel" placeholder -> update it
+                    camKeyframes[0] = s;
+                    camPendingEnd = s;
+                } else {
+                    camKeyframes.push(s);
+                }
+            } else {
+                camKeyframes[camKeyframes.length-1] = s;
+            }
+        }
+
+        if(camKeyframes.length >= 2){
+            camEndFirst = false;
+            camPendingEnd = null;
+        }
+
+        syncLegacyKeyframes();
+        renderCamKeyframeList();
+        alert((t==='A'?'Start':'Ziel') + " OK");
+    }
+
+    function flyToCamKeyframe(i){
+        const k = camKeyframes[i];
+        if(!k) return;
+        map.flyTo({center:[k.lng,k.lat], zoom:k.zoom, pitch:k.pitch, bearing:k.bearing, duration:800, essential:true});
+    }
+    function moveCamKeyframe(i, dir){
+        const j = i + dir;
+        if(j < 0 || j >= camKeyframes.length) return;
+        const tmp = camKeyframes[i]; camKeyframes[i] = camKeyframes[j]; camKeyframes[j] = tmp;
+        syncLegacyKeyframes();
+        renderCamKeyframeList();
+    }
+    function deleteCamKeyframe(i){
+        camKeyframes.splice(i,1);
+        syncLegacyKeyframes();
+        renderCamKeyframeList();
+    }
+    function formatKf(k){
+        const b = ((k.bearing%360)+360)%360;
+        return `z ${k.zoom.toFixed(2)} · p ${k.pitch.toFixed(0)}° · b ${b.toFixed(0)}°`;
+    }
+    function renderCamKeyframeList(){
+        const st = document.getElementById('camKfStatus');
+        const list = document.getElementById('camKfList');
+        if(!st || !list) return;
+        st.textContent = `Keyframes: ${camKeyframes.length} (max ${CAM_MAX_KF})`;
+        if(camKeyframes.length === 0){
+            list.innerHTML = `<div style="color:#777;">Tipp: Karte bewegen/kippen und Start / + Punkt / Ziel setzen.</div>`;
+            return;
+        }
+        list.innerHTML = camKeyframes.map((k, i) => {
+            const label = (i===0) ? "Start" : (i===camKeyframes.length-1 ? "Ziel" : `P${i}`);
+            return `
+            <div class="cam-kf-item">
+                <button class="btn-def mini-btn" onclick="flyToCamKeyframe(${i})">Go</button>
+                <button class="btn-def mini-btn" onclick="moveCamKeyframe(${i},-1)">▲</button>
+                <button class="btn-def mini-btn" onclick="moveCamKeyframe(${i},1)">▼</button>
+                <button class="btn-red mini-btn" onclick="deleteCamKeyframe(${i})">✖</button>
+                <div class="cam-kf-meta">${i+1}. ${label} · ${formatKf(k)}</div>
+            </div>`;
+        }).join('');
+    }
+
+    // ---- Smooth multi-keyframe camera path ----
+    function clampLat(lat){ return Math.max(-85, Math.min(85, lat)); }
+    function clamp(v, min, max){ return Math.max(min, Math.min(max, v)); }
+    function mercatorMeters(lng, lat){
+        const R = 6378137;
+        const x = R * (lng * Math.PI/180);
+        const y = R * Math.log(Math.tan(Math.PI/4 + (clampLat(lat) * Math.PI/180)/2));
+        return [x,y];
+    }
+    function invMercatorMeters(x, y){
+        const R = 6378137;
+        const lng = (x / R) * 180/Math.PI;
+        const lat = (2*Math.atan(Math.exp(y/R)) - Math.PI/2) * 180/Math.PI;
+        return [lng, clampLat(lat)];
+    }
+    function unwrapAnglesDeg(arr){
+        if(arr.length===0) return [];
+        const out=[arr[0]];
+        for(let i=1;i<arr.length;i++){
+            const prev=out[i-1];
+            let cur=arr[i];
+            let d = cur - prev;
+            d = ((d + 180) % 360) - 180;
+            out.push(prev + d);
+        }
+        return out;
+    }
+
+    // Centripetal Catmull-Rom (alpha=0.5) – prevents overshoot/loops much better than uniform CR.
+    function _crSafeDen(d){ return (Math.abs(d) < 1e-9) ? (d < 0 ? -1e-9 : 1e-9) : d; }
+
+    function catmullRomCentripetal1D(p0,p1,p2,p3,u,alpha=0.5){
+        const d01 = Math.max(1e-6, Math.abs(p1-p0));
+        const d12 = Math.max(1e-6, Math.abs(p2-p1));
+        const d23 = Math.max(1e-6, Math.abs(p3-p2));
+        const t0 = 0;
+        const t1 = t0 + Math.pow(d01, alpha);
+        const t2 = t1 + Math.pow(d12, alpha);
+        const t3 = t2 + Math.pow(d23, alpha);
+        const t  = t1 + u*(t2-t1);
+
+        const A1 = ((t1-t)/_crSafeDen(t1-t0))*p0 + ((t-t0)/_crSafeDen(t1-t0))*p1;
+        const A2 = ((t2-t)/_crSafeDen(t2-t1))*p1 + ((t-t1)/_crSafeDen(t2-t1))*p2;
+        const A3 = ((t3-t)/_crSafeDen(t3-t2))*p2 + ((t-t2)/_crSafeDen(t3-t2))*p3;
+
+        const B1 = ((t2-t)/_crSafeDen(t2-t0))*A1 + ((t-t0)/_crSafeDen(t2-t0))*A2;
+        const B2 = ((t3-t)/_crSafeDen(t3-t1))*A2 + ((t-t1)/_crSafeDen(t3-t1))*A3;
+
+        const C  = ((t2-t)/_crSafeDen(t2-t1))*B1 + ((t-t1)/_crSafeDen(t2-t1))*B2;
+        return C;
+    }
+
+    function catmullRomCentripetal2D(P0,P1,P2,P3,u,alpha=0.5){
+        const dx01=P1[0]-P0[0], dy01=P1[1]-P0[1];
+        const dx12=P2[0]-P1[0], dy12=P2[1]-P1[1];
+        const dx23=P3[0]-P2[0], dy23=P3[1]-P2[1];
+
+        const d01=Math.max(1e-6, Math.hypot(dx01,dy01));
+        const d12=Math.max(1e-6, Math.hypot(dx12,dy12));
+        const d23=Math.max(1e-6, Math.hypot(dx23,dy23));
+
+        const t0=0;
+        const t1=t0 + Math.pow(d01, alpha);
+        const t2=t1 + Math.pow(d12, alpha);
+        const t3=t2 + Math.pow(d23, alpha);
+        const t = t1 + u*(t2-t1);
+
+        const a10=((t1-t)/_crSafeDen(t1-t0)), a11=((t-t0)/_crSafeDen(t1-t0));
+        const a20=((t2-t)/_crSafeDen(t2-t1)), a21=((t-t1)/_crSafeDen(t2-t1));
+        const a30=((t3-t)/_crSafeDen(t3-t2)), a31=((t-t2)/_crSafeDen(t3-t2));
+
+        const A1=[a10*P0[0]+a11*P1[0], a10*P0[1]+a11*P1[1]];
+        const A2=[a20*P1[0]+a21*P2[0], a20*P1[1]+a21*P2[1]];
+        const A3=[a30*P2[0]+a31*P3[0], a30*P2[1]+a31*P3[1]];
+
+        const b10=((t2-t)/_crSafeDen(t2-t0)), b11=((t-t0)/_crSafeDen(t2-t0));
+        const b20=((t3-t)/_crSafeDen(t3-t1)), b21=((t-t1)/_crSafeDen(t3-t1));
+
+        const B1=[b10*A1[0]+b11*A2[0], b10*A1[1]+b11*A2[1]];
+        const B2=[b20*A2[0]+b21*A3[0], b20*A2[1]+b21*A3[1]];
+
+        const c0=((t2-t)/_crSafeDen(t2-t1)), c1=((t-t1)/_crSafeDen(t2-t1));
+        const C=[c0*B1[0]+c1*B2[0], c0*B1[1]+c1*B2[1]];
+        return C;
+    }
+
+    function splineAt1D(values, t){
+        const n=values.length;
+        if(n===1) return values[0];
+        const segs=n-1;
+        const s=Math.min(segs-1e-9, Math.max(0, t*segs));
+        const i=Math.floor(s);
+        const u=s-i;
+        const i1=i, i2=i+1, i0=Math.max(0,i-1), i3=Math.min(n-1,i+2);
+        return catmullRomCentripetal1D(values[i0], values[i1], values[i2], values[i3], u);
+    }
+
+    function splineAt2D(points, t){
+        const n=points.length;
+        if(n===1) return points[0].slice();
+        const segs=n-1;
+        const s=Math.min(segs-1e-9, Math.max(0, t*segs));
+        const i=Math.floor(s);
+        const u=s-i;
+        const i1=i, i2=i+1, i0=Math.max(0,i-1), i3=Math.min(n-1,i+2);
+        return catmullRomCentripetal2D(points[i0], points[i1], points[i2], points[i3], u);
+    }
+
+function buildArcTable(kfs, totalFrames){
+        // Use a mixed metric so "zoom-only" segments still get time.
+        const pts=[], zooms=[], pitchs=[], bears=[];
+        for(const k of kfs){
+            const [mx,my]=mercatorMeters(k.lng, k.lat);
+            pts.push([mx,my]);
+            zooms.push(k.zoom); pitchs.push(k.pitch); bears.push(k.bearing);
+        }
+        const bearsU = unwrapAnglesDeg(bears);
+
+        const samples = Math.min(4000, Math.max(800, totalFrames*3));
+        const ts = new Float64Array(samples);
+        const ds = new Float64Array(samples);
+        ts[0]=0; ds[0]=0;
+
+        const WZ=15000, WP=300, WB=200; // meters per unit (heuristic)
+        let _p0=splineAt2D(pts,0); let lastX=_p0[0], lastY=_p0[1];
+        let lastZ=splineAt1D(zooms,0), lastP=splineAt1D(pitchs,0), lastB=splineAt1D(bearsU,0);
+
+        let total=0;
+        for(let i=1;i<samples;i++){
+            const t=i/(samples-1);
+            ts[i]=t;
+            const _p=splineAt2D(pts,t); const x=_p[0], y=_p[1];
+            const z=splineAt1D(zooms,t), p=splineAt1D(pitchs,t), b=splineAt1D(bearsU,t);
+
+            const pos = Math.hypot(x-lastX, y-lastY);
+            const dz = Math.abs(z-lastZ)*WZ;
+            const dp = Math.abs(p-lastP)*WP;
+            const db = Math.abs(b-lastB)*WB;
+            const step = Math.hypot(pos, dz, dp, db);
+
+            total += step;
+            ds[i]=total;
+
+            lastX=x; lastY=y; lastZ=z; lastP=p; lastB=b;
+        }
+        return {ts, ds, total, pts, zooms, pitchs, bearsU};
+    }
+    function tForDistance(table, dist){
+        const {ds, ts} = table;
+        let lo=0, hi=ds.length-1;
+        while(lo<hi){
+            const mid=(lo+hi)>>1;
+            if(ds[mid] < dist) lo=mid+1; else hi=mid;
+        }
+        const i=lo;
+        if(i<=0) return ts[0];
+        const d0=ds[i-1], d1=ds[i];
+        const t0=ts[i-1], t1=ts[i];
+        const f = (d1===d0) ? 0 : (dist-d0)/(d1-d0);
+        return t0 + (t1-t0)*f;
+    }
+
+    // Override multi-keyframe render
+    function lerp(a,b,t){ return a + (b-a)*t; }
+    
+    function computeBearingDeg(lng1, lat1, lng2, lat2){
+        // Fast bearing (deg) normalized to [-180, 180]
+        const toRad = Math.PI / 180;
+        const toDeg = 180 / Math.PI;
+        const phi1 = lat1 * toRad;
+        const phi2 = lat2 * toRad;
+        const dLam = (lng2 - lng1) * toRad;
+        const y = Math.sin(dLam) * Math.cos(phi2);
+        const x = Math.cos(phi1) * Math.sin(phi2) - Math.sin(phi1) * Math.cos(phi2) * Math.cos(dLam);
+        const brng = Math.atan2(y, x) * toDeg;
+        // normalize [-180, 180]
+        return ((brng + 540) % 360) - 180;
+    }
+
+function lerpBearingDeg(a,b,t){
+        // shortest-path interpolation in degrees
+        let d = (b - a);
+        d = ((d + 180) % 360) - 180;
+        return a + d * t;
+    }
+    function keepTargetWithinViewport(targetLngLat, marginFrac=0.10){
+        // Keeps target within a safe rectangle; returns new center [lng,lat] or null
+        if(!map) return null;
+        const canvas = map.getCanvas();
+        const w = canvas.width || 0;
+        const h = canvas.height || 0;
+        if(w <= 0 || h <= 0) return null;
+
+        const m = Math.round(Math.min(w,h) * marginFrac);
+        const minX = m, maxX = w - m;
+        const minY = m, maxY = h - m;
+
+        const p = map.project(targetLngLat);
+        const cx = Math.min(maxX, Math.max(minX, p.x));
+        const cy = Math.min(maxY, Math.max(minY, p.y));
+
+        const dx = p.x - cx;
+        const dy = p.y - cy;
+
+        // subpixel tolerance
+        if(Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) return null;
+
+        const newC = map.unproject([w/2 + dx, h/2 + dy]);
+        return [newC.lng, newC.lat];
+    }
+
+
+    async function precomputeTwoPointCentersKeepTarget(k0, k1, frames, easeFn, targetLngLat, marginFrac=0.08){
+        // Precompute a *fixed* camera path (no per-frame feedback) that keeps the target within a safe rectangle.
+        // This avoids oscillation and prevents the target from leaving the viewport during long zoom-ins.
+        if(!map) return null;
+
+        const saved = {
+            center: map.getCenter(),
+            zoom: map.getZoom(),
+            pitch: map.getPitch(),
+            bearing: map.getBearing()
+        };
+
+        const canvas = map.getCanvas();
+        const w = canvas.width || 0;
+        const h = canvas.height || 0;
+        if(w <= 0 || h <= 0) return null;
+
+        const m = Math.round(Math.min(w, h) * marginFrac);
+        const minX = m, maxX = w - m;
+        const minY = m, maxY = h - m;
+
+        const [x0, y0] = mercatorMeters(k0.lng, k0.lat);
+        const [x1, y1] = mercatorMeters(k1.lng, k1.lat);
+        const b0 = k0.bearing, b1 = k1.bearing;
+
+        const req = new Array(frames + 1);
+
+        // Pass 1: measure required pixel shift (dx/dy) to keep target inside safe rect
+        for(let i=0;i<=frames;i++){
+            const u = i/frames;
+            const ue = easeFn(u);
+
+            const x = lerp(x0, x1, ue);
+            const y = lerp(y0, y1, ue);
+            const [lng, lat] = invMercatorMeters(x, y);
+
+            const z = lerp(k0.zoom, k1.zoom, ue);
+            const p = lerp(k0.pitch, k1.pitch, ue);
+            const b = ((lerpBearingDeg(b0, b1, ue) % 360) + 360) % 360;
+
+            map.jumpTo({center:[lng,lat], zoom:z, pitch:Math.max(0, Math.min(85,p)), bearing:b, duration:0});
+
+            const pt = map.project(targetLngLat);
+            const cx = Math.min(maxX, Math.max(minX, pt.x));
+            const cy = Math.min(maxY, Math.max(minY, pt.y));
+
+            const dx = pt.x - cx;
+            const dy = pt.y - cy;
+
+            req[i] = {dx, dy};
+        }
+
+        // Smooth the required shift a bit (moving average) to avoid harsh corrections
+        const win = 7; // odd number
+        const half = Math.floor(win/2);
+        const sm = new Array(frames + 1);
+        for(let i=0;i<=frames;i++){
+            let sx=0, sy=0, c=0;
+            for(let j=Math.max(0,i-half); j<=Math.min(frames,i+half); j++){
+                sx += req[j].dx;
+                sy += req[j].dy;
+                c++;
+            }
+            sm[i] = {dx: sx/c, dy: sy/c};
+        }
+
+        // Pass 2: convert shift into corrected centers
+        const centers = new Array(frames + 1);
+        for(let i=0;i<=frames;i++){
+            const u = i/frames;
+            const ue = easeFn(u);
+
+            const x = lerp(x0, x1, ue);
+            const y = lerp(y0, y1, ue);
+            const [lng, lat] = invMercatorMeters(x, y);
+
+            const z = lerp(k0.zoom, k1.zoom, ue);
+            const p = lerp(k0.pitch, k1.pitch, ue);
+            const b = ((lerpBearingDeg(b0, b1, ue) % 360) + 360) % 360;
+
+            map.jumpTo({center:[lng,lat], zoom:z, pitch:Math.max(0, Math.min(85,p)), bearing:b, duration:0});
+
+            const d = sm[i];
+            // Only apply if we are outside the safe zone (avoid introducing drift)
+            if(Math.abs(d.dx) < 0.5 && Math.abs(d.dy) < 0.5){
+                centers[i] = [lng, lat];
+            } else {
+                const newC = map.unproject([w/2 + d.dx, h/2 + d.dy]);
+                centers[i] = [newC.lng, newC.lat];
+            }
+        }
+
+        // Restore previous view
+        map.jumpTo({center:[saved.center.lng, saved.center.lat], zoom:saved.zoom, pitch:saved.pitch, bearing:saved.bearing, duration:0});
+
+        return centers;
+    }
+
+
+    async function renderCameraMove(isPreview = false){
+        // Backwards compatible: if user only used old A/B, seed list.
+        if(camKeyframes.length === 0 && keyframeA && keyframeB) camKeyframes = [keyframeA, keyframeB];
+        if(camKeyframes.length < 2) return alert("Start/Ziel? (mind. 2 Keyframes)");
+
+        const dur = Math.max(1, parseFloat(document.getElementById('camDuration').value || "10"));
+        const frames = Math.round(dur * 30);
+        const easeName = (document.getElementById('camEase')?.value) || "easeInOutCubic";
+        const easeFn = (Easing && Easing[easeName]) ? Easing[easeName] : (t=>t);
+
+        const focusKf = camKeyframes[camKeyframes.length - 1];
+        const focusTarget = [focusKf.lng, focusKf.lat]; // keep "Ziel" in frame (helps long zooms)
+
+        if(!isPreview) toggleUI(false);
+        await sleep(400);
+
+        let rec = null;
+        if(!isPreview){
+            rec = createRec('Zoom');
+            rec.start(); // record continuously; less jitter than pause/resume
+        }
+
+        // Special case: exactly 2 keyframes => use direct Mercator lerp (no spline overshoot, no arc re-timing)
+        const isTwoPoint = (camKeyframes.length === 2);
+        let k0, k1, x0,y0,x1,y1, b0,b1;
+        if(isTwoPoint){
+            k0 = camKeyframes[0];
+            k1 = camKeyframes[1];
+            [x0,y0] = mercatorMeters(k0.lng, k0.lat);
+            [x1,y1] = mercatorMeters(k1.lng, k1.lat);
+            b0 = ((k0.bearing % 360) + 360) % 360;
+            b1 = ((k1.bearing % 360) + 360) % 360;
+        } else {
+            // For multi-point we keep the existing centripetal spline + arc-length table
+            var table = buildArcTable(camKeyframes, frames);
+            var _latMin = Math.min(...camKeyframes.map(k=>k.lat));
+            var _latMax = Math.max(...camKeyframes.map(k=>k.lat));
+            var _lngMin = Math.min(...camKeyframes.map(k=>k.lng));
+            var _lngMax = Math.max(...camKeyframes.map(k=>k.lng));
+            var _doClamp = ((_lngMax - _lngMin) < 180);
+            var _mLat = 2.0;
+            var _mLng = 3.0;
+            var total = table.total || 1;
+        }
+
+
+        const _projBefore = (map.getProjection && map.getProjection().name) ? map.getProjection().name : null;
+        const _restoreProj = (_projBefore && map.setProjection && (_projBefore !== 'mercator'));
+        try { if(_restoreProj) map.setProjection('mercator'); } catch(e){}
+
+        const _container = map.getContainer ? map.getContainer() : null;
+        const _vw = _container ? _container.clientWidth : (window.innerWidth||0);
+        const _vh = _container ? _container.clientHeight : (window.innerHeight||0);
+        const _marginFrac = 0.08;
+        // Two-point mode uses deterministic interpolation (no anchor/pan corrections).
+        for(let i=0;i<=frames;i++){
+            const u = i/frames;
+            const ue = easeFn(u);
+
+            let lng, lat, z, p, b;
+
+            if(isTwoPoint){
+                // Balanced 2-keyframe move:
+                // - pan progresses slightly faster than zoom (keeps Ziel in view longer)
+                // - zoom progresses slightly slower at the beginning (feels more even)
+                const panT  = Math.pow(ue, 0.75);
+                const zoomT = Math.pow(ue, 1.60);
+
+                const x = lerp(x0, x1, panT);
+                const y = lerp(y0, y1, panT);
+                [lng, lat] = invMercatorMeters(x, y);
+
+                z = lerp(k0.zoom, k1.zoom, zoomT);
+                p = lerp((k0.pitch||0), (k1.pitch||0), ue);
+                b = lerpBearingDeg(b0, b1, ue);
+                b = ((b % 360) + 360) % 360;
+            } else {
+                const target = ue * total;
+                const t = tForDistance(table, target);
+
+                const _p = splineAt2D(table.pts, t);
+                const x = _p[0];
+                const y = _p[1];
+                z = splineAt1D(table.zooms, t);
+                p = splineAt1D(table.pitchs, t);
+                const bU = splineAt1D(table.bearsU, t);
+                b = ((bU % 360) + 360) % 360;
+
+                const [lng0, lat0] = invMercatorMeters(x,y);
+                lat = Math.max(_latMin-_mLat, Math.min(_latMax+_mLat, lat0));
+                lng = _doClamp ? Math.max(_lngMin-_mLng, Math.min(_lngMax+_mLng, lng0)) : lng0;
+            }
+
+            // 1) Apply planned camera state
+            map.jumpTo({center:[lng,lat], zoom:z, pitch:Math.max(0, Math.min(85,p)), bearing:b, duration:0});
+
+            // yield to let WebGL draw
+            await sleep(33);
+        }
+
+        try { if(_restoreProj) map.setProjection(_projBefore); } catch(e){}
+
+        if(rec){
+            rec.stop();
+            toggleUI(true);
+        }
+    }
+
+    // Preview uses same path
+    function previewCameraMove(){
+        renderCameraMove(true);
+    }
+
+    // Initialize list on load
+    setTimeout(renderCamKeyframeList, 300);
+
+    // Close time helper when clicking outside the panel
+    setTimeout(() => {
+        const modal = document.getElementById('timeHelperModal');
+        if (modal) {
+            modal.addEventListener('click', (e) => {
+                if (e.target && e.target.id === 'timeHelperModal') closeTimeHelper();
+            });
+        }
+    }, 0);
+
+</script>
+</body>
+</html>
